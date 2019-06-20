@@ -85,6 +85,7 @@ static const SequenceNumber kMaxSequenceNumber = ((0x1ull << 56) - 1);
 
 static const SequenceNumber kDisableGlobalSequenceNumber = port::kMaxUint64;
 
+//解码获取成员值见ParseInternalKey
 struct ParsedInternalKey {
   Slice user_key;
   SequenceNumber sequence;
@@ -93,6 +94,8 @@ struct ParsedInternalKey {
   ParsedInternalKey()
       : sequence(kMaxSequenceNumber)  // Make code analyzer happy
   {}  // Intentionally left uninitialized (for speed)
+
+  //InternalKey解码
   ParsedInternalKey(const Slice& u, const SequenceNumber& seq, ValueType t)
       : user_key(u), sequence(seq), type(t) {}
   std::string DebugString(bool hex = false) const;
@@ -135,6 +138,7 @@ extern bool ParseInternalKey(const Slice& internal_key,
                              ParsedInternalKey* result);
 
 // Returns the user key portion of an internal key.
+//获取ParsedInternalKey.user_key
 inline Slice ExtractUserKey(const Slice& internal_key) {
   assert(internal_key.size() >= 8);
   return Slice(internal_key.data(), internal_key.size() - 8);
@@ -146,6 +150,7 @@ inline uint64_t ExtractInternalKeyFooter(const Slice& internal_key) {
   return DecodeFixed64(internal_key.data() + n - 8);
 }
 
+//获取ParsedInternalKey.type
 inline ValueType ExtractValueType(const Slice& internal_key) {
   uint64_t num = ExtractInternalKeyFooter(internal_key);
   unsigned char c = num & 0xff;
@@ -259,12 +264,17 @@ inline int InternalKeyComparator::Compare(const InternalKey& a,
   return Compare(a.Encode(), b.Encode());
 }
 
+//Internal key的解码 将编码后的internal_key解码为* result。
 inline bool ParseInternalKey(const Slice& internal_key,
                              ParsedInternalKey* result) {
   const size_t n = internal_key.size();
   if (n < 8) return false;
+
+  // DecodeFixed64函数是PutFixed64函数的逆过程，返回sequence和type的打包结果，并赋值给num。
   uint64_t num = DecodeFixed64(internal_key.data() + n - 8);
+  // 截取低8位，赋值给c
   unsigned char c = num & 0xff;
+  // 右移8位，赋值给sequence
   result->sequence = num >> 8;
   result->type = static_cast<ValueType>(c);
   assert(result->type <= ValueType::kMaxValue);

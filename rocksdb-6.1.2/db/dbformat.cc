@@ -30,6 +30,21 @@ namespace rocksdb {
 const ValueType kValueTypeForSeek = kTypeBlobIndex;
 const ValueType kValueTypeForSeekForPrev = kTypeDeletion;
 
+
+/*
+先将seq左移8位，然后和t进行或操作，相当于把t放到了seq的低8为。为什么seq要小于等于kMaxSequenceNumber呢。
+
+
+因为kMaxSequenceNumber的值如下所示。
+typedef uint64_t SequenceNumber;
+
+// We leave eight bits empty at the bottom so a type and sequence#
+// can be packed together into 64-bits.
+//0x1ull:u-unsigned 无符号；l-long 长整型，ll就是64位整型。整个0x1ull代表的含义是无符号64位整型常量1，用16进制表示。
+static const SequenceNumber kMaxSequenceNumber = ((0x1ull << 56) - 1);
+
+用二进制表示就是：0000 0000 1111 1111 1111 1111 1111 1111。如果seq大于kMaxSequenceNumber，左移8位的话会移出界。
+*/
 uint64_t PackSequenceAndType(uint64_t seq, ValueType t) {
   assert(seq <= kMaxSequenceNumber);
   assert(IsExtendedValueType(t));
@@ -74,6 +89,7 @@ void UnPackSequenceAndType(uint64_t packed, uint64_t* seq, ValueType* t) {
   assert(IsExtendedValueType(*t));
 }
 
+//AppendInternalKey函数先把user_key添加到*result中，然后用PackSequenceAndType函数将sequence和type打包，并将打包的结果添加到*result中。
 void AppendInternalKey(std::string* result, const ParsedInternalKey& key) {
   result->append(key.user_key.data(), key.user_key.size());
   PutFixed64(result, PackSequenceAndType(key.sequence, key.type));
@@ -107,7 +123,10 @@ std::string InternalKey::DebugString(bool hex) const {
 }
 
 const char* InternalKeyComparator::Name() const { return name_.c_str(); }
-
+/*
+1）首先比较user_key，如果user_key不相同，就直接返回比较结果，否则继续进行第二步。user_comparator_是用户指定的比较器，在InternalKeyComparator构造时传入。
+2）在user_key相同的情况下，比较sequence_numer|value type然后返回结果(注意每个Internal Key的sequence_number是唯一的，因此不可能出现anum==bnum的情况)
+*/
 int InternalKeyComparator::Compare(const ParsedInternalKey& a,
                                    const ParsedInternalKey& b) const {
   // Order by:
@@ -129,6 +148,12 @@ int InternalKeyComparator::Compare(const ParsedInternalKey& a,
   return r;
 }
 
+/*
+1）该函数取出Internal Key中的user_key字段，根据用户指定的comparator找到短字符串并替换user_start。
+此时user_start物理上是变短了，但是逻辑上却变大了，详见BytewiseComparatorImpl
+
+2）如果user_start被替换了，就用新的user_start更新Internal Key，并使用最大的sequence number。否则start保持不变。
+*/
 void InternalKeyComparator::FindShortestSeparator(std::string* start,
                                                   const Slice& limit) const {
   // Attempt to shorten the user portion of the key
