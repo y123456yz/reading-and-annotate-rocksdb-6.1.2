@@ -93,11 +93,15 @@ Arena::~Arena() {
 }
 
 char* Arena::AllocateFallback(size_t bytes, bool aligned) {
+  // 如果需求的内存大于内存块中剩余的内存，而且大于1K，则给这内存单独分配一块bytes大小的内存。  
+  // 这样可以避免浪费过多的空间（因为如果bytes大于1K也从4K的内存块去取用，那么如果当前内存块中刚好剩余  
+  // 1K，只能再新建一个4K的内存块，并且取用bytes。此时新建的内存块是当前内存块，后续操作都是基于当前内  
+  // 存块的，那么原内存块中的1K空间就浪费了）
   if (bytes > kBlockSize / 4) {
     ++irregular_block_num;
     // Object is more than a quarter of our block size.  Allocate it separately
     // to avoid wasting too much space in leftover bytes.
-    return AllocateNewBlock(bytes);
+    return AllocateNewBlock(bytes); //对于超过1k的请求，直接new一个指定大小的内存块并返回
   }
 
   // We waste the remaining space in the current block.
@@ -109,6 +113,7 @@ char* Arena::AllocateFallback(size_t bytes, bool aligned) {
     block_head = AllocateFromHugePage(size);
   }
 #endif
+  //小于1K的请求，则申请一个新的4k内存块，从中分配一部分给用户。
   if (!block_head) {
     size = kBlockSize;
     block_head = AllocateNewBlock(size);
@@ -159,6 +164,17 @@ char* Arena::AllocateFromHugePage(size_t bytes) {
 #endif
 }
 
+// 提供了字节对齐内存分配，一般情况是4字节或8个字节对齐分配，
+// 对齐内存的好处简单的说就是加速内存访问。
+// 首先获取一个指针的大小const int align = sizeof(void*)，
+// 很明显，在32位系统下是4 ,64位系统下是8 ，为了表述方便，我们假设是32位系统，即align ＝ 4,
+// 然后将我们使用的char * 指针地址转换为一个无符号整型(reinterpret_cast<uintptr_t>(result):
+// It is an unsigned int that is guaranteed to be the same size as a pointer.)，通过与操作来
+// 获取size_t current_mod = reinterpret_cast<uintptr_t>(alloc_ptr_) & (align-1);当前指针模4
+// 的值，有了这个值以后，我们就容易知道，还差 slop = align - current_mod多个字节，内存才是对齐的，
+// 所以有了result = alloc_ptr + slop。那么获取bytes大小的内存，实际上需要的大小为needed = bytes + slop。
+
+//内存对其原因参考https://blog.csdn.net/caoshangpa/article/details/78841715
 char* Arena::AllocateAligned(size_t bytes, size_t huge_page_size,
                              Logger* logger) {
   assert((kAlignUnit & (kAlignUnit - 1)) ==
@@ -204,6 +220,7 @@ char* Arena::AllocateAligned(size_t bytes, size_t huge_page_size,
   return result;
 }
 
+// 分配新的内存块  Arena::~Arena中释放
 char* Arena::AllocateNewBlock(size_t block_bytes) {
   // Reserve space in `blocks_` before allocating memory via new.
   // Use `emplace_back()` instead of `reserve()` to let std::vector manage its

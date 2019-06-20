@@ -53,7 +53,7 @@ class Arena : public Allocator {
   explicit Arena(size_t block_size = kMinBlockSize,
                  AllocTracker* tracker = nullptr, size_t huge_page_size = 0);
   ~Arena();
-
+  // 分配bytes大小的内存块，返回指向该内存块的指针
   char* Allocate(size_t bytes) override;
 
   // huge_page_size: if >0, will try to allocate from huage page TLB.
@@ -68,12 +68,14 @@ class Arena : public Allocator {
   // normal cases. The messages will be logged to logger. So when calling with
   // huge_page_tlb_size > 0, we highly recommend a logger is passed in.
   // Otherwise, the error message will be printed out to stderr directly.
+  // 基于malloc的字节对齐内存分配
   char* AllocateAligned(size_t bytes, size_t huge_page_size = 0,
                         Logger* logger = nullptr) override;
 
   // Returns an estimate of the total memory usage of data allocated
   // by the arena (exclude the space allocated but not yet used for future
   // allocations).
+  // 返回整个内存池使用内存的总大小
   size_t ApproximateMemoryUsage() const {
     return blocks_memory_ + blocks_.capacity() * sizeof(char*) -
            alloc_bytes_remaining_;
@@ -97,7 +99,9 @@ class Arena : public Allocator {
   char inline_block_[kInlineSize] __attribute__((__aligned__(alignof(max_align_t))));
   // Number of bytes allocated in one block
   const size_t kBlockSize;
+  
   // Array of new[] allocated memory blocks
+  // 用来存储每一次向系统请求分配的内存块的指针
   typedef std::vector<char*> Blocks;
   Blocks blocks_;
 
@@ -115,9 +119,13 @@ class Arena : public Allocator {
   // allocate unaligned memory chucks from the other end. Otherwise the
   // memory waste for alignment will be higher if we allocate both types of
   // memory from one direction.
+
+   // 当前内存块(block)偏移量指针，也就是未使用内存的首地址
   char* unaligned_alloc_ptr_ = nullptr;
   char* aligned_alloc_ptr_ = nullptr;
+  
   // How many bytes left in currently active block?
+  // 表示当前内存块(block)中未使用的空间大小
   size_t alloc_bytes_remaining_ = 0;
 
 #ifdef MAP_HUGETLB
@@ -128,6 +136,7 @@ class Arena : public Allocator {
   char* AllocateNewBlock(size_t block_bytes);
 
   // Bytes of memory in blocks allocated so far
+  // 迄今为止分配的内存块的总大小
   size_t blocks_memory_ = 0;
   AllocTracker* tracker_;
 };
@@ -137,11 +146,14 @@ inline char* Arena::Allocate(size_t bytes) {
   // 0-byte allocations, so we disallow them here (we don't need
   // them for our internal use).
   assert(bytes > 0);
-  if (bytes <= alloc_bytes_remaining_) {
+  if (bytes <= alloc_bytes_remaining_) { //直接使用可用的空间，不alloc
     unaligned_alloc_ptr_ -= bytes;
     alloc_bytes_remaining_ -= bytes;
     return unaligned_alloc_ptr_;
   }
+
+  // 因为alloc_bytes_remaining_初始为0，因此第一次调用Allocate实际上直接调用的是AllocateFallback
+  // 如果需求的内存大于内存块中剩余的内存，也会调用AllocateFallback
   return AllocateFallback(bytes, false /* unaligned */);
 }
 
