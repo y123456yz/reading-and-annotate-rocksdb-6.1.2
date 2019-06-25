@@ -114,6 +114,8 @@ extern std::shared_ptr<Cache> NewClockCache(size_t capacity,
                                             int num_shard_bits = -1,
                                             bool strict_capacity_limit = false);
 
+//LRUCache继承ShardedCache，ShardedCache继承Cache
+//可以参考https://blog.csdn.net/caoshangpa/article/details/78960999
 class Cache {
  public:
   // Depending on implementation, cache entries with high priority could be less
@@ -150,6 +152,9 @@ class Cache {
   //
   // When the inserted entry is no longer needed, the key and
   // value will be passed to "deleter".
+  // 插入键值对，并指定占用的缓存大小（charge），返回被插入的结点。
+  // 如果插入的键值对用不到了，传给deleter函数。
+  // 如果返回值用不到了，记得调用this->Release(handle)释放。
   virtual Status Insert(const Slice& key, void* value, size_t charge,
                         void (*deleter)(const Slice& key, void* value),
                         Handle** handle = nullptr,
@@ -162,6 +167,10 @@ class Cache {
   // longer needed.
   // If stats is not nullptr, relative tickers could be used inside the
   // function.
+
+  
+  // 如果没找到结点，返回NULL。否则返回找到的结点。
+  // 如果返回值用不到了，记得调用this->Release(handle)释放。
   virtual Handle* Lookup(const Slice& key, Statistics* stats = nullptr) = 0;
 
   // Increments the reference count for the handle if it refers to an entry in
@@ -182,22 +191,27 @@ class Cache {
    */
   // REQUIRES: handle must not have been released yet.
   // REQUIRES: handle must have been returned by a method on *this.
+  // 释放结点，注意不要重复释放。
   virtual bool Release(Handle* handle, bool force_erase = false) = 0;
 
   // Return the value encapsulated in a handle returned by a
   // successful Lookup().
   // REQUIRES: handle must not have been released yet.
   // REQUIRES: handle must have been returned by a method on *this.
+  // 返回结点handle中的Value值，注意判断handle的有效性。
   virtual void* Value(Handle* handle) = 0;
 
   // If the cache contains entry for key, erase it.  Note that the
   // underlying entry will be kept around until all existing handles
   // to it have been released.
+
+  // 删除包含key的结点
   virtual void Erase(const Slice& key) = 0;
   // Return a new numeric id.  May be used by multiple clients who are
   // sharding the same cache to partition the key space.  Typically the
   // client will allocate a new id at startup and prepend the id to
   // its cache keys.
+  // 返回数字ID，用于处理多线程同时访问缓存时的同步
   virtual uint64_t NewId() = 0;
 
   // sets the maximum configured capacity of the cache. When the new

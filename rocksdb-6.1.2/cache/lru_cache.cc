@@ -462,6 +462,7 @@ std::string LRUCacheShard::GetPrintableOptions() const {
   return std::string(buffer);
 }
 
+//NewLRUCache
 LRUCache::LRUCache(size_t capacity, int num_shard_bits,
                    bool strict_capacity_limit, double high_pri_pool_ratio,
                    std::shared_ptr<MemoryAllocator> allocator,
@@ -548,6 +549,8 @@ std::shared_ptr<Cache> NewLRUCache(const LRUCacheOptions& cache_opts) {
                      cache_opts.use_adaptive_mutex);
 }
 
+//
+// 创建Cache的全局方法，capacity为容量大小
 std::shared_ptr<Cache> NewLRUCache(
     size_t capacity, int num_shard_bits, bool strict_capacity_limit,
     double high_pri_pool_ratio,

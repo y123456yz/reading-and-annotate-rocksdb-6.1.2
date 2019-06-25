@@ -43,14 +43,23 @@ namespace rocksdb {
 // matching
 // RUCache::Release (to move into state 2) or LRUCacheShard::Erase (for state 3)
 
+//一个LRUHandle就是一个结点，这个结构体设计的巧妙之处在于，它既可以作为HashTable中的结点
+//LRUHandleTable.list_成员
 struct LRUHandle {
   void* value;
+  //删除器。当refs == 0时，调用deleter完成value对象释放。
   void (*deleter)(const Slice&, void* value);
-  LRUHandle* next_hash;
+  // 作为HashTable中的节点，指向hash值相同的节点（解决hash冲突采用链地址法）
+  //参考LRUHandleTable::Insert
+  LRUHandle* next_hash; 
+  // 作为LRUCache中的节点，指向后继
   LRUHandle* next;
+  // 作为LRUCache中的节点，指向前驱
   LRUHandle* prev;
+   // 用户指定占用缓存的大小
   size_t charge;  // TODO(opt): Only allow uint32_t?
-  size_t key_length;
+  size_t key_length;// key长度
+  // 引用计数
   uint32_t refs;     // a number of refs to this entry
                      // cache itself is counted as 1
 
@@ -67,7 +76,7 @@ struct LRUHandle {
   };
 
   uint8_t flags;
-
+  // 哈希值
   uint32_t hash;     // Hash of key(); used for fast sharding and comparisons
 
   char key_data[1];  // Beginning of key
@@ -127,6 +136,8 @@ struct LRUHandle {
 // table implementations in some of the compiler/runtime combinations
 // we have tested.  E.g., readrandom speeds up by ~5% over the g++
 // 4.4.3's builtin hashtable.
+
+//LRUCacheShard.table_成员
 class LRUHandleTable {
  public:
   LRUHandleTable();
@@ -159,12 +170,14 @@ class LRUHandleTable {
 
   // The table consists of an array of buckets where each bucket is
   // a linked list of cache entries that hash into the bucket.
+  //hash桶的链表成员赋值LRUHandleTable::Resize
   LRUHandle** list_;
   uint32_t length_;
   uint32_t elems_;
 };
 
 // A single shard of sharded cache.
+//LRUCache.shards_成员
 class ALIGN_AS(CACHE_LINE_SIZE) LRUCacheShard final : public CacheShard {
  public:
   LRUCacheShard(size_t capacity, bool strict_capacity_limit,
@@ -270,6 +283,7 @@ class ALIGN_AS(CACHE_LINE_SIZE) LRUCacheShard final : public CacheShard {
   // ------------------------------------
   // Frequently modified data members
   // ------------vvvvvvvvvvvvv-----------
+  //一个LRUCacheShard类对应一个 LRU hash桶
   LRUHandleTable table_;
 
   // Memory size for entries residing in the cache
@@ -284,6 +298,8 @@ class ALIGN_AS(CACHE_LINE_SIZE) LRUCacheShard final : public CacheShard {
   mutable port::Mutex mutex_;
 };
 
+//LRUCache继承ShardedCache，ShardedCache继承Cache
+//图解参考https://blog.csdn.net/caoshangpa/article/details/78960999
 class LRUCache
 #ifdef NDEBUG
     final
@@ -309,7 +325,9 @@ class LRUCache
   double GetHighPriPoolRatio();
 
  private:
+ //LRUCache::LRUCache
   LRUCacheShard* shards_ = nullptr;
+  //多少个LRU hash桶
   int num_shards_ = 0;
 };
 
