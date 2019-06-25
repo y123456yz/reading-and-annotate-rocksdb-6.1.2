@@ -50,7 +50,7 @@ struct LRUHandle {
   //删除器。当refs == 0时，调用deleter完成value对象释放。
   void (*deleter)(const Slice&, void* value);
   // 作为HashTable中的节点，指向hash值相同的节点（解决hash冲突采用链地址法）
-  //参考LRUHandleTable::Insert
+  //赋值参考LRUHandleTable::Insert  LRUHandleTable::Resize
   LRUHandle* next_hash; 
   // 作为LRUCache中的节点，指向后继
   LRUHandle* next;
@@ -58,7 +58,7 @@ struct LRUHandle {
   LRUHandle* prev;
    // 用户指定占用缓存的大小
   size_t charge;  // TODO(opt): Only allow uint32_t?
-  size_t key_length;// key长度
+  size_t key_length;//key_length key长度,key数据其实地址key_data
   // 引用计数
   uint32_t refs;     // a number of refs to this entry
                      // cache itself is counted as 1
@@ -78,7 +78,7 @@ struct LRUHandle {
   uint8_t flags;
   // 哈希值
   uint32_t hash;     // Hash of key(); used for fast sharding and comparisons
-
+  //key_length key长度,key数据其实地址key_data
   char key_data[1];  // Beginning of key
 
   Slice key() const {
@@ -171,9 +171,12 @@ class LRUHandleTable {
   // The table consists of an array of buckets where each bucket is
   // a linked list of cache entries that hash into the bucket.
   //hash桶的链表成员赋值LRUHandleTable::Resize
-  LRUHandle** list_;
-  uint32_t length_;
-  uint32_t elems_;
+   //哈希地址数组的二级指针
+  LRUHandle** list_; 
+  //哈希地址数组的长度
+  uint32_t length_;  
+  //哈希表中所有结点的总数
+  uint32_t elems_;  
 };
 
 // A single shard of sharded cache.

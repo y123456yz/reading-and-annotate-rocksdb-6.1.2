@@ -39,22 +39,34 @@ LRUHandle* LRUHandleTable::Lookup(const Slice& key, uint32_t hash) {
   return *FindPointer(key, hash);
 }
 
+//LRUCacheShard::Insert中调用
 LRUHandle* LRUHandleTable::Insert(LRUHandle* h) {
   LRUHandle** ptr = FindPointer(h->key(), h->hash);
   LRUHandle* old = *ptr;
   h->next_hash = (old == nullptr ? nullptr : old->next_hash);
+  
+ // 不管找没找到h结点，都是可以直接将h替换到*ptr的。
+ // 1.如果找到了，因为key相同，直接替换相当于替换结点中的value
+ // 2.如果没找到，也就是添加到对应链表头部尾部
   *ptr = h;
   if (old == nullptr) {
-    ++elems_;
+    ++elems_;//如果没找到，相当于要添加了一个新的结点，此时结点总数elems_加1
+
+	// 当elems_ > length_时进行扩容，这样可以保证在大部分情况下，所有以哈希地址为头的
+	// 链表平均最多只有一个结点。因为结点比较大，扩容后能保证查找的时间复制度为O(1)。
     if (elems_ > length_) {
       // Since each cache entry is fairly large, we aim for a small
       // average linked list length (<= 1).
       Resize();
     }
   }
+
+  // 将old返回很重要，因为这个被摘到的handle需要在函数外面销毁。
   return old;
 }
 
+
+// 删除结点
 LRUHandle* LRUHandleTable::Remove(const Slice& key, uint32_t hash) {
   LRUHandle** ptr = FindPointer(key, hash);
   LRUHandle* result = *ptr;
@@ -65,14 +77,27 @@ LRUHandle* LRUHandleTable::Remove(const Slice& key, uint32_t hash) {
   return result;
 }
 
+/*
+如果找到了结点，返回该结点的二级指针。  
+如果没找到结点，分两种情况:  
+1.根据哈希值求出的哈希地址是空的，也就是说以该哈希地址（哈希桶）为头的单链表还没有结点。
+    hash & (length_ - 1)的取值范围是0—（length_-1）。此时返回哈希地址的二级指针，*ptr=NULL 。    
+2.查找到了以某哈希地址为头的单链表的尾部，也没找到该结点。此时返回尾部结点next_hash域的二级指针，*ptr=NULL 。
+*/ //在指定hash桶的链表上查找key
 LRUHandle** LRUHandleTable::FindPointer(const Slice& key, uint32_t hash) {
+  //先确定在hash桶的那个链表上
   LRUHandle** ptr = &list_[hash & (length_ - 1)];
+  //首先链表的hash值要相同，然后遍历链表查找key相同的节点
   while (*ptr != nullptr && ((*ptr)->hash != hash || key != (*ptr)->key())) {
     ptr = &(*ptr)->next_hash;
   }
   return ptr;
 }
 
+//hash统扩容，也就是调整list链表数组大小
+// 哈希表扩容
+// HandleTable内部维护了一个LRUHandle*的数组，默认大小为16。随着插入数据的增多，
+// 该数组会自动增长一倍，并将原数组中的数据重新分配到新的数组中。
 void LRUHandleTable::Resize() {
   uint32_t new_length = 16;
   while (new_length < elems_ * 1.5) {
@@ -81,6 +106,12 @@ void LRUHandleTable::Resize() {
   LRUHandle** new_list = new LRUHandle*[new_length];
   memset(new_list, 0, sizeof(new_list[0]) * new_length);
   uint32_t count = 0;
+  
+  // 需要注意的是，从新分配结点的时候，结点都往每个链表的头部插入的。
+  // 而正常的Insert操作，相同hash值的结点是插入到链表的尾部
+
+  //也就是对已有的所有节点进行rehash，例如如果原来list_数组长度为16，list_[i]这个链表的hash值为4，现在扩容了，
+  //new_length变为32，则
   for (uint32_t i = 0; i < length_; i++) {
     LRUHandle* h = list_[i];
     while (h != nullptr) {
