@@ -117,10 +117,22 @@ private:
     std::function<void()> unschedFunction;
   };
 
+  /*
+  PosixEnv还有一个很重要的功能，计划任务，也就是后台的compaction线程。compaction就是压缩合并的意思，写入KV记录操作很简单，
+  删除记录仅仅写入一个删除标记就算完事，但是读取记录比较复杂，需要在内存以及各个层级文件中依照新鲜程度依次查找，代价很高。
+  为了加快读取速度，LevelDB采取了compaction的方式来对已有的记录进行整理压缩，通过这种方式，来删除掉一些不再有效的KV数据，
+  减小数据规模，减少文件数量等。
+
+  主线程一旦判定需要进行compaction操作，就把compaction任务压进队列queue_中，BGItem是存有任务函数和db对象指针的结构。而后
+  台线程从一开始就不断根据队列中的函数指针执行compaction任务。BGThread()函数就是不停的在queue_中取出函数指针，执行。
+  */
+  //用的是deque双端队列作为底层的数据结构
   using BGQueue = std::deque<BGItem>;
   BGQueue       queue_;
 
+  //锁操作
   std::mutex               mu_;
+  //条件变量，队列空了就进入等待，直至有新的任务加入进来
   std::condition_variable  bgsignal_;
   std::vector<port::Thread> bgthreads_;
 };
@@ -183,6 +195,8 @@ void ThreadPoolImpl::Impl::LowerCPUPriority() {
   low_cpu_priority_ = true;
 }
 
+//PosixEnv::Schedule入队 ThreadPoolImpl::Impl::BGThread从队列中取出任务执行
+//从队列中取出任务执行
 void ThreadPoolImpl::Impl::BGThread(size_t thread_id) {
   bool low_io_priority = false;
   bool low_cpu_priority = false;

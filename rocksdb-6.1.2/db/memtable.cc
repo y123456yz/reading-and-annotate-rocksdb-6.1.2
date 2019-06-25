@@ -461,6 +461,8 @@ MemTable::MemTableStats MemTable::ApproximateStats(const Slice& start_ikey,
   return {entry_count * (data_size / n), entry_count};
 }
 
+//图解参考https://blog.csdn.net/caoshangpa/article/details/78901792
+//MemTable::Add和MemTable::Get对应
 bool MemTable::Add(SequenceNumber s, ValueType type,
                    const Slice& key, /* user key */
                    const Slice& value, bool allow_concurrent,
@@ -501,6 +503,7 @@ bool MemTable::Add(SequenceNumber s, ValueType type,
         return res;
       }
     } else {
+      //KV添加到跳跃表中
       bool res = table->InsertKey(handle);
       if (UNLIKELY(!res)) {
         return res;
@@ -738,6 +741,11 @@ static bool SaveValue(void* arg, const char* entry) {
   return false;
 }
 
+//MemTable::Add和MemTable::Get对应
+
+// 如果能找到key对应的value, 将该value存储到*value参数中，返回值为true。
+// 如果这个key中的有删除标识,存放一个NotFound()错误到*status参数中，返回值为true。
+// 否则返回值为false
 bool MemTable::Get(const LookupKey& key, std::string* value, Status* s,
                    MergeContext* merge_context,
                    SequenceNumber* max_covering_tombstone_seq,

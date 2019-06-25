@@ -55,6 +55,8 @@ class PosixHelper {
   static size_t GetUniqueIdFromFile(int fd, char* id, size_t max_size);
 };
 
+//PosixSequentialFile类实现顺序读，PosixRandomAccessFile类实现随机读，PosixWritableFile类实现顺序写
+//顺序读
 class PosixSequentialFile : public SequentialFile {
  private:
   std::string filename_;
@@ -68,6 +70,10 @@ class PosixSequentialFile : public SequentialFile {
                       const EnvOptions& options);
   virtual ~PosixSequentialFile();
 
+  // 从文件中读取n个字节存放到 "scratch[0..n-1]"， 然后将"scratch[0..n-1]"转化为Slice类型并存放到*result中
+  // 如果正确读取，则返回OK status，否则返回non-OK status
+
+  //PosixSequentialFile::Read
   virtual Status Read(size_t n, Slice* result, char* scratch) override;
   virtual Status PositionedRead(uint64_t offset, size_t n, Slice* result,
                                 char* scratch) override;
@@ -79,6 +85,8 @@ class PosixSequentialFile : public SequentialFile {
   }
 };
 
+//PosixSequentialFile类实现顺序读，PosixRandomAccessFile类实现随机读，PosixWritableFile类实现顺序写
+//这就是LevelDB从磁盘顺序读取文件的接口了，用的是C的流文件操作和FILE结构体。需要注意的是Read接口读取文件时不会锁住文件流，因此外部的并发访问需要自行提供并发控制。
 class PosixRandomAccessFile : public RandomAccessFile {
  protected:
   std::string filename_;
@@ -107,6 +115,8 @@ class PosixRandomAccessFile : public RandomAccessFile {
   }
 };
 
+//PosixSequentialFile类实现顺序读，PosixRandomAccessFile类实现随机读，PosixWritableFile类实现顺序写
+//顺序写
 class PosixWritableFile : public WritableFile {
  protected:
   const std::string filename_;

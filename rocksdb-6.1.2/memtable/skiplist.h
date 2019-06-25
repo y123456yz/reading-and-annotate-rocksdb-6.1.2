@@ -41,6 +41,11 @@
 namespace rocksdb {
 
 template<typename Key, class Comparator>
+//跳跃表参考https://blog.csdn.net/caoshangpa/article/details/78862339
+//https://blog.csdn.net/caoshangpa/article/details/78874665
+
+//rocksdb中的几种不同跳表  skiplist hash_skiplist 
+//memtable在内存中的形式有三种：skiplist、hash-skiplist、hash-linklist，见https://blog.csdn.net/flyqwang/article/details/50096377
 class SkipList {
  private:
   struct Node;

@@ -167,21 +167,31 @@ PosixSequentialFile::~PosixSequentialFile() {
   }
 }
 
+// 从文件中读取n个字节存放到 "scratch[0..n-1]"， 然后将"scratch[0..n-1]"转化为Slice类型并存放到*result中
+// 如果正确读取，则返回OK status，否则返回non-OK status
 Status PosixSequentialFile::Read(size_t n, Slice* result, char* scratch) {
   assert(result != nullptr && !use_direct_io());
   Status s;
   size_t r = 0;
   do {
+  	  // ptr:用于接收数据的内存地址 
+  	  // size:要读的每个数据项的字节数，单位是字节  
+  	  // n:要读n个数据项，每个数据项size个字节  
+  	  // stream:输入流  // 返回值：返回实际读取的数据大小  
+  	  // 因为函数名带了"_unlocked"后缀，所以它不是线程安全的
     r = fread_unlocked(scratch, 1, n, file_);
   } while (r == 0 && ferror(file_) && errno == EINTR);
+
+  // Slice的第二个参数要用实际读到的数据大小，因为读到文件尾部，剩下的字节数可能小于n
   *result = Slice(scratch, r);
   if (r < n) {
+  	// 如果r<n，且feof(file_)非零，说明到了文件结尾，什么都不用做，函数结束后会返回OK Status
     if (feof(file_)) {
       // We leave status as ok if we hit the end of the file
       // We also clear the error so that the reads can continue
       // if a new data is written to the file
       clearerr(file_);
-    } else {
+    } else {  // 否则返回错误信息
       // A partial read with an error: return a non-ok status
       s = IOError("While reading file sequentially", filename_, errno);
     }
@@ -227,7 +237,22 @@ Status PosixSequentialFile::PositionedRead(uint64_t offset, size_t n,
   return s;
 }
 
+// 跳过n字节的内容，这并不比读取n字节的内容慢，而且会更快。
+// 如果到达了文件尾部，则会停留在文件尾部，并返回OK Status。
+// 否则，返回错误信息
 Status PosixSequentialFile::Skip(uint64_t n) {
+   // int fseek(FILE *stream, long offset, int origin);   
+   // stream:文件指针   
+   // offset:偏移量，整数表示正向偏移，负数表示负向偏移   
+   // origin:设定从文件的哪里开始偏移, 可能取值为：SEEK_CUR、 SEEK_END 或 SEEK_SET	
+   // SEEK_SET： 文件开头	 // SEEK_CUR： 当前位置   
+   // SEEK_END： 文件结尾   
+   // 其中SEEK_SET, SEEK_CUR和SEEK_END和依次为0，1和2.	 
+   // 举例：	 
+   // fseek(fp, 100L, 0); 把fp指针移动到离文件开头100字节处；   
+   // fseek(fp, 100L, 1); 把fp指针移动到离文件当前位置100字节处；   
+   // fseek(fp, 100L, 2); 把fp指针退回到离文件结尾100字节处。	
+   // 返回值：成功返回0，失败返回非0
   if (fseek(file_, static_cast<long int>(n), SEEK_CUR)) {
     return IOError("While fseek to skip " + ToString(n) + " bytes", filename_,
                    errno);
@@ -323,6 +348,8 @@ PosixRandomAccessFile::PosixRandomAccessFile(const std::string& fname, int fd,
 
 PosixRandomAccessFile::~PosixRandomAccessFile() { close(fd_); }
 
+// 这里与顺序读的同名函数相比，多了一个参数offset，offset用来指定
+// 读取位置距离文件起始位置的偏移量，这样就可以实现随机读了
 Status PosixRandomAccessFile::Read(uint64_t offset, size_t n, Slice* result,
                                    char* scratch) const {
   if (use_direct_io()) {
@@ -335,6 +362,12 @@ Status PosixRandomAccessFile::Read(uint64_t offset, size_t n, Slice* result,
   size_t left = n;
   char* ptr = scratch;
   while (left > 0) {
+  	/*
+	PosixRandomAccessFile 在非windows系统上使用了 pread 来实现原子的定位加访问功能。常规的随机访问文件的过程可以分为两步，
+	fseek (seek) 定位到访问点，调用 fread (read) 来从特定位置开始访问 FILE* (fd)。然而，这两个操作组合在一起并不是原子的，
+	即 fseek 和 fread 之间可能会插入其他线程的文件操作。相比之下 pread 由系统来保证实现原子的定位和读取组合功能。需要注意的是，
+	pread 操作不会更新文件指针。
+	*/
     r = pread(fd_, ptr, left, static_cast<off_t>(offset));
     if (r <= 0) {
       if (r == -1 && errno == EINTR) {
@@ -732,6 +765,7 @@ Status PosixMmapFile::Allocate(uint64_t offset, uint64_t len) {
  *
  * Use posix write to write data to a file.
  */
+//顺序写
 PosixWritableFile::PosixWritableFile(const std::string& fname, int fd,
                                      const EnvOptions& options)
     : filename_(fname),

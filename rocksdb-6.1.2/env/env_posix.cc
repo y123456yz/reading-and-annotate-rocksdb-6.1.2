@@ -97,6 +97,7 @@ static int LockOrUnlock(int fd, bool lock) {
   return value;
 }
 
+//文件锁
 class PosixFileLock : public FileLock {
  public:
   int fd_;
@@ -115,6 +116,7 @@ int cloexec_flags(int flags, const EnvOptions* options) {
   return flags;
 }
 
+//参考https://blog.csdn.net/caoshangpa/article/details/78913718
 class PosixEnv : public Env {
  public:
   PosixEnv();
@@ -141,6 +143,7 @@ class PosixEnv : public Env {
     }
   }
 
+  //ReadFileToString调用
   Status NewSequentialFile(const std::string& fname,
                            std::unique_ptr<SequentialFile>* result,
                            const EnvOptions& options) override {
@@ -332,6 +335,7 @@ class PosixEnv : public Env {
     return s;
   }
 
+  //WriteStringToFile调用
   Status NewWritableFile(const std::string& fname,
                          std::unique_ptr<WritableFile>* result,
                          const EnvOptions& options) override {
@@ -1007,6 +1011,7 @@ class PosixEnv : public Env {
 
   size_t page_size_;
 
+  //线程池，任务在PosixEnv::Schedule中入队
   std::vector<ThreadPoolImpl> thread_pools_;
   pthread_mutex_t mu_;
   std::vector<pthread_t> threads_to_join_;
@@ -1031,6 +1036,7 @@ PosixEnv::PosixEnv()
   thread_status_updater_ = CreateThreadStatusUpdater();
 }
 
+//PosixEnv::Schedule入队 ThreadPoolImpl::Impl::BGThread从队列中取出任务执行
 void PosixEnv::Schedule(void (*function)(void* arg1), void* arg, Priority pri,
                         void* tag, void (*unschedFunction)(void* arg)) {
   assert(pri >= Priority::BOTTOM && pri <= Priority::HIGH);

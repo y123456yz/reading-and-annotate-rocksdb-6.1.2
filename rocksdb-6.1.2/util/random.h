@@ -16,6 +16,7 @@ namespace rocksdb {
 // A very simple random number generator.  Not especially good at
 // generating truly random bits, but good enough for our needs in this
 // package.
+//生成随机数相关
 class Random {
  private:
   enum : uint32_t {

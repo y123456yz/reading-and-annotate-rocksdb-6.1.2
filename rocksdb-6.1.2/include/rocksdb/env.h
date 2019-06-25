@@ -112,6 +112,11 @@ struct EnvOptions {
   RateLimiter* rate_limiter = nullptr;
 };
 
+//参考https://blog.csdn.net/caoshangpa/article/details/78913718
+/*
+考虑到移植以及灵活性，LevelDB将系统相关的处理（文件/进程/时间）抽象成Evn，用户可以自己实现相应的接口，
+作为option的一部分传入，默认使用自带的实现。 
+*/ //PosixEnv继承该类，最终赋值给EnvWrapper.target_
 class Env {
  public:
   struct FileAttributes {
@@ -503,6 +508,9 @@ class Env {
 ThreadStatusUpdater* CreateThreadStatusUpdater();
 
 // A file abstraction for reading sequentially through a file
+
+//虚基类WritableFile、SequentialFile、RandomAccessFile，分别是文件的写抽象类，顺序读抽象类和随机读抽象类
+//PosixEnv类中包含这几个类的new接口   PosixSequentialFile继承该类
 class SequentialFile {
  public:
   SequentialFile() {}
@@ -516,6 +524,7 @@ class SequentialFile {
   // If an error was encountered, returns a non-OK status.
   //
   // REQUIRES: External synchronization
+
   virtual Status Read(size_t n, Slice* result, char* scratch) = 0;
 
   // Skip "n" bytes from the file. This is guaranteed to be no
@@ -554,6 +563,8 @@ class SequentialFile {
 };
 
 // A file abstraction for randomly reading the contents of a file.
+//虚基类WritableFile、SequentialFile、RandomAccessFile，分别是文件的写抽象类，顺序读抽象类和随机读抽象类
+//PosixEnv类中包含这几个类的new接口  PosixRandomAccessFile继承该类
 class RandomAccessFile {
  public:
   RandomAccessFile() {}
@@ -623,6 +634,9 @@ class RandomAccessFile {
 // A file abstraction for sequential writing.  The implementation
 // must provide buffering since callers may append small fragments
 // at a time to the file.
+
+//虚基类WritableFile、SequentialFile、RandomAccessFile，分别是文件的写抽象类，顺序读抽象类和随机读抽象类
+//PosixEnv类中包含这几个类的new接口   PosixWritableFile继承该类
 class WritableFile {
  public:
   WritableFile()
@@ -883,7 +897,9 @@ enum InfoLogLevel : unsigned char {
 };
 
 // An interface for writing log messages.
-class Logger {
+
+//类Logger，log文件的写入接口 LoggerWrapper类继承该类
+class Logger { //PosixLogger继承该类
  public:
   size_t kDoNotSupportGetLogFileSize = (std::numeric_limits<size_t>::max)();
 
@@ -937,6 +953,7 @@ class Logger {
 };
 
 // Identifies a locked file.
+//文件锁相关，PosixFileLock类继承该类
 class FileLock {
  public:
   FileLock() {}
@@ -1031,6 +1048,14 @@ extern Status ReadFileToString(Env* env, const std::string& fname,
 // An implementation of Env that forwards all calls to another Env.
 // May be useful to clients who wish to override just part of the
 // functionality of another Env.
+
+/*
+该类继承自Env，且只有一个成员函数Env* target_，该类的所有变量都调用Env类相应的成员变量，我们知道，Env是一个抽象类，
+是不能定义Env 类型的对象的。我们传给EnvWrapper 的构造函数的类型是PosixEnv，所以，最后调用的都是PosixEnv类的成员变量，
+你可能已经猜到了，这就是设计模式中的代理模式，EnvWrapper只是进行了简单的封装，它的代理了Env的子类PosixEnv。
+
+EnvWrapper和Env与PosixEnv的关系见：https://blog.csdn.net/caoshangpa/article/details/78913718
+*/
 class EnvWrapper : public Env {
  public:
   // Initialize an EnvWrapper that delegates all calls to *t

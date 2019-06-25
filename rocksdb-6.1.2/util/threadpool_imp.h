@@ -16,7 +16,7 @@
 
 namespace rocksdb {
 
-
+//Ïß³Ì³Ø PosixEnv.thread_pools_
 class ThreadPoolImpl : public ThreadPool {
  public:
   ThreadPoolImpl();
