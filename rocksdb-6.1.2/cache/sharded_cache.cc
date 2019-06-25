@@ -47,10 +47,12 @@ void ShardedCache::SetStrictCapacityLimit(bool strict_capacity_limit) {
   strict_capacity_limit_ = strict_capacity_limit;
 }
 
+//
 Status ShardedCache::Insert(const Slice& key, void* value, size_t charge,
                             void (*deleter)(const Slice& key, void* value),
                             Handle** handle, Priority priority) {
   uint32_t hash = HashSlice(key);
+  //LRUCacheShard::Insert
   return GetShard(Shard(hash))
       ->Insert(key, hash, value, charge, deleter, handle, priority);
 }
@@ -75,6 +77,7 @@ void ShardedCache::Erase(const Slice& key) {
   GetShard(Shard(hash))->Erase(key, hash);
 }
 
+// 返回数字ID，用于处理多线程同时访问缓存时的同步
 uint64_t ShardedCache::NewId() {
   return last_id_.fetch_add(1, std::memory_order_relaxed);
 }

@@ -39,6 +39,10 @@ LRUHandle* LRUHandleTable::Lookup(const Slice& key, uint32_t hash) {
   return *FindPointer(key, hash);
 }
 
+//注意LRUCacheShard::LRU_Insert和LRUHandleTable::Insert的区别，
+//可以参考https://blog.csdn.net/caoshangpa/article/details/78783749
+//LRU_Insert主要是通过lru_进行淘汰，LRUHandleTable::Insert通过hash来管理LRUHandle节点信息，可以快速查找
+
 //LRUCacheShard::Insert中调用
 LRUHandle* LRUHandleTable::Insert(LRUHandle* h) {
   LRUHandle** ptr = FindPointer(h->key(), h->hash);
@@ -87,7 +91,11 @@ LRUHandle* LRUHandleTable::Remove(const Slice& key, uint32_t hash) {
 LRUHandle** LRUHandleTable::FindPointer(const Slice& key, uint32_t hash) {
   //先确定在hash桶的那个链表上
   LRUHandle** ptr = &list_[hash & (length_ - 1)];
-  //首先链表的hash值要相同，然后遍历链表查找key相同的节点
+  //首先链表的hash值要相同，然后遍历链表查找key相同的节点，
+  //查找LRUHandle节点，除了key相同，hash值也必须相同??? 为什么这样，hash值根据key来的，key相同，hash值不是肯定相同吗?
+  //HandleTable是哈希表，但比较奇怪的是，查找、插入、删除动作除了传入key外，还要自备hash值。这样做是因为，
+  //hash值除了HandleTable中使用，在外部做多级缓存时也需要
+  //参考ShardedCache::Insert中hash值计算过程
   while (*ptr != nullptr && ((*ptr)->hash != hash || key != (*ptr)->key())) {
     ptr = &(*ptr)->next_hash;
   }
@@ -110,8 +118,8 @@ void LRUHandleTable::Resize() {
   // 需要注意的是，从新分配结点的时候，结点都往每个链表的头部插入的。
   // 而正常的Insert操作，相同hash值的结点是插入到链表的尾部
 
-  //也就是对已有的所有节点进行rehash，例如如果原来list_数组长度为16，list_[i]这个链表的hash值为4，现在扩容了，
-  //new_length变为32，则
+  //对所有节点进行rehash
+  //如果成员过多，这里遍历会不会阻塞????????
   for (uint32_t i = 0; i < length_; i++) {
     LRUHandle* h = list_[i];
     while (h != nullptr) {
@@ -124,6 +132,8 @@ void LRUHandleTable::Resize() {
       count++;
     }
   }
+
+  //保证所有的LRUHandle都rehash到新的链表上，数量要一致
   assert(elems_ == count);
   delete[] list_;
   list_ = new_list;
@@ -150,6 +160,8 @@ LRUCacheShard::LRUCacheShard(size_t capacity, bool strict_capacity_limit,
 
 LRUCacheShard::~LRUCacheShard() {}
 
+
+// 引用计数减一。引用计数变为0时，调用删除器deleter。
 bool LRUCacheShard::Unref(LRUHandle* e) {
   assert(e->refs > 0);
   e->refs--;
@@ -229,6 +241,11 @@ void LRUCacheShard::LRU_Remove(LRUHandle* e) {
   }
 }
 
+//注意LRUCacheShard::LRU_Insert和LRUHandleTable::Insert的区别，
+//可以参考https://blog.csdn.net/caoshangpa/article/details/78783749
+//LRU_Insert主要是通过lru_进行淘汰，LRUHandleTable::Insert通过hash来管理LRUHandle节点信息，可以快速查找
+
+//LRUCacheShard::Insert调用
 void LRUCacheShard::LRU_Insert(LRUHandle* e) {
   assert(e->next == nullptr);
   assert(e->prev == nullptr);
@@ -264,6 +281,9 @@ void LRUCacheShard::MaintainPoolSize() {
   }
 }
 
+// 如果已用容量超过了总容量且头结点lru_还有后继。
+// 删除lru_的后继结点，根据LRUCache规则，这个结点最近用的最少。
+// 该结点既要从哈希表中移除，也要从双向链表中移除，然后再释放。
 void LRUCacheShard::EvictFromLRU(size_t charge,
                                  autovector<LRUHandle*>* deleted) {
   while (usage_ + charge > capacity_ && lru_.next != &lru_) {
@@ -299,6 +319,9 @@ void LRUCacheShard::SetStrictCapacityLimit(bool strict_capacity_limit) {
   strict_capacity_limit_ = strict_capacity_limit;
 }
 
+// 根据LRUCache规则，被访问的结点要移动到双向链表的lru_结点之前
+// 移动只是改变了结点前驱指针和后继指针的指向，结点的存储位置并没变化
+// 返回被找到的结点，如果没找到，返回NULL
 Cache::Handle* LRUCacheShard::Lookup(const Slice& key, uint32_t hash) {
   MutexLock l(&mutex_);
   LRUHandle* e = table_.Lookup(key, hash);
@@ -310,6 +333,8 @@ Cache::Handle* LRUCacheShard::Lookup(const Slice& key, uint32_t hash) {
     e->refs++;
     e->SetHit();
   }
+
+  // 如果返回值不为NULL且用不到了，记得调用Relese或Erase释放
   return reinterpret_cast<Cache::Handle*>(e);
 }
 
@@ -368,6 +393,7 @@ bool LRUCacheShard::Release(Cache::Handle* handle, bool force_erase) {
   return last_reference;
 }
 
+//ShardedCache::Insert
 Status LRUCacheShard::Insert(const Slice& key, uint32_t hash, void* value,
                              size_t charge,
                              void (*deleter)(const Slice& key, void* value),
@@ -386,6 +412,7 @@ Status LRUCacheShard::Insert(const Slice& key, uint32_t hash, void* value,
   e->key_length = key.size();
   e->flags = 0;
   e->hash = hash;
+  // 初始设为2的情况，一个是给LRUCache自身析构时用，一个是给外部调用Release或Erase时用。
   e->refs = (handle == nullptr
                  ? 1
                  : 2);  // One from LRUCache, one for the returned handle
@@ -399,6 +426,10 @@ Status LRUCacheShard::Insert(const Slice& key, uint32_t hash, void* value,
 
     // Free the space following strict LRU policy until enough space
     // is freed or the lru list is empty
+    
+	// 如果已用容量超过了总容量且头结点lru_还有后继。
+    // 删除lru_的后继结点，根据LRUCache规则，这个结点最近用的最少。
+    // 该结点既要从哈希表中移除，也要从双向链表中移除，然后再释放。
     EvictFromLRU(charge, &last_reference_list);
 
     if (usage_ - lru_usage_ + charge > capacity_ &&
@@ -416,7 +447,13 @@ Status LRUCacheShard::Insert(const Slice& key, uint32_t hash, void* value,
       // insert into the cache
       // note that the cache might get larger than its capacity if not enough
       // space was freed
-      LRUHandle* old = table_.Insert(e);
+      // 当哈希表中已存在hash值相同的结点时，将原有的结点从双向链表中移除， 
+      // 并释放该结点。  
+      // 这里不需要调用哈希表的Remove方法将该结点从哈希表中移除，因为Insert  
+      // 的时候实际上已经移除了。  
+      // 这段代码也可以看出为何哈希表的Insert方法要返回旧结点？因为不返回旧  
+      // 结点，后续就无法对该结点进行LRU_Remove操作了。
+      LRUHandle* old = table_.Insert(e); //LRUHandleTable::Insert
       usage_ += e->charge;
       if (old != nullptr) {
         old->SetInCache(false);
@@ -446,6 +483,8 @@ Status LRUCacheShard::Insert(const Slice& key, uint32_t hash, void* value,
   return s;
 }
 
+// 删除结点，注意和Release方法的不同。删除结点先将结点从哈希表和
+// 双向链表中移除，然后再释放该结点。
 void LRUCacheShard::Erase(const Slice& key, uint32_t hash) {
   LRUHandle* e;
   bool last_reference = false;
@@ -503,6 +542,8 @@ LRUCache::LRUCache(size_t capacity, int num_shard_bits,
   num_shards_ = 1 << num_shard_bits;
   shards_ = reinterpret_cast<LRUCacheShard*>(
       port::cacheline_aligned_alloc(sizeof(LRUCacheShard) * num_shards_));
+  // capacity是Cache大小，其单位可以自行指定（如table cache，一个sstable文件的索引信息是一个单位，
+  // 而block cache，一个byte是一个单位）
   size_t per_shard = (capacity + (num_shards_ - 1)) / num_shards_;
   for (int i = 0; i < num_shards_; i++) {
     new (&shards_[i])

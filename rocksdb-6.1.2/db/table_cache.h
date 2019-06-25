@@ -32,6 +32,21 @@ struct FileDescriptor;
 class GetContext;
 class HistogramImpl;
 
+/*
+为了加快查找速度，LevelDB在内存中采用Cache的方式，在table中采用bloom filter的方式，尽最大可能加快随机读操作。
+Cache分为两种，分别是table cache和block cache。
+1.table cache
+    table cache缓存的是table的索引数据，类似于文件系统中对inode的缓存。table cache默认大小是1000，注意此处缓存
+的是1000个table文件的索引信息，而不是1000个字节。table cache的大小由options.max_open_files确定，其最小值为20-10，
+最大值为50000－10。
+2.block cache
+    block cache是缓存的block数据，block是table文件内组织数据的单位，也是从持久化存储中读取和写入的单位。由于table
+是按照key有序分布的，因此一个block内的数据也是按照key紧邻排布的（有序依照使用者传入的比较函数，默认按照字典序），
+类似于Linux中的page cache。block默认大小为4k，由LevelDB调用open函数打开数据库时时传入的options.block_size参数指定。
+代码中限制的block最小大小为1k，最大大小为4M。对于频繁做scan操作的应用，可适当调大此参数，对大量小value随机读取的应用，
+也可尝试调小该参数。block cache默认实现是一个8M大小的ShardedLRUCache，此参数由options.block_cache设定。当然也可根据应
+用需求，提供自定义的缓存策略。注意，此处的大小是未压缩的block大小。
+*/
 class TableCache {
  public:
   TableCache(const ImmutableCFOptions& ioptions,

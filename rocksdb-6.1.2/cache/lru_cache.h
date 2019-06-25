@@ -43,15 +43,36 @@ namespace rocksdb {
 // matching
 // RUCache::Release (to move into state 2) or LRUCacheShard::Erase (for state 3)
 
+/*  LRUHandle为什么会被同时置于哈希表和双向链表之中？
+注意看LookUp的实现，如果单纯使用链表，则仅能提供O(n)的查询效率，所以在查询时，利用了哈希表实现O(1)的查询。
+那么，如果单纯使用哈希表呢？虽然可以实现O(1)的查询，但却无法更新缓存节点的访问时间。这是因为链表可以按照
+固定的顺序被遍历，而哈希表中的节点无法提供固定的遍历顺序（考虑Resize前后）。那么，可不可以将访问时间记录
+在Handle中，然后仅用哈希表，这样既可以实现O(1)的查询，又可以方便地更新缓存记录的访问时间，岂不美哉？但是，
+如果没有按访问时间排序的链表，当触发缓存回收时，我们如何快速定位到哪些缓存记录要被回收呢？链表O(n)的查询效率、
+哈希表不支持排序，两种数据结构单独都无法满足这里的需求。作者大神巧妙地将二者结合，取长补短，利用哈希表实现O(1)
+的查询，利用链表维持对缓存记录按访问时间排序	
+
+        查询	插入	删除	排序
+链表	O(n)	O(1)	O(1)	支持
+哈希表	O(1)	O(1)	O(1)	不支持
+
+注1：哈希表实现O(1)操作的前提是：平均每哈希桶元素数 <= 1
+注2：为了保持平均哈希桶元素数，必要时必须Resize，而Resize后，原有顺序将被打破
+*/
+
 //一个LRUHandle就是一个结点，这个结构体设计的巧妙之处在于，它既可以作为HashTable中的结点
 //LRUHandleTable.list_成员
-struct LRUHandle {
+struct LRUHandle { //成员赋值见LRUCacheShard::Insert
   void* value;
   //删除器。当refs == 0时，调用deleter完成value对象释放。
   void (*deleter)(const Slice&, void* value);
-  // 作为HashTable中的节点，指向hash值相同的节点（解决hash冲突采用链地址法）
+  // 作为HashTable中的节点，指向hash值相同的节点（解决hash冲突采用链地址法），单向链表，用户解决相同hash的KV节点冲突，相同hash值的通过该单项链表管理起来
   //赋值参考LRUHandleTable::Insert  LRUHandleTable::Resize
   LRUHandle* next_hash; 
+
+  //LRUHandle由hash桶和list一起管理，一个用于LRU淘汰用，一个用于快速查找，但是节点LRUHandle是共用的
+
+  //LRU相关，链表头实际上为LRUCacheShard.lru_成员，可以参考https://blog.csdn.net/caoshangpa/article/details/78783749
   // 作为LRUCache中的节点，指向后继
   LRUHandle* next;
   // 作为LRUCache中的节点，指向前驱
@@ -59,6 +80,15 @@ struct LRUHandle {
    // 用户指定占用缓存的大小
   size_t charge;  // TODO(opt): Only allow uint32_t?
   size_t key_length;//key_length key长度,key数据其实地址key_data
+  /* 1.为何要维护引用计数？
+    在Insert时，引用计数初始化为2，一个是给LRUCache自身析构时用，一个是给外部调用Release或Erase时用。Insert时，返回
+  的是新插入的结点，插入完成后，需要调用该结点Release或Erase方法将引用计数减1，那么此时该结点的引用计数就是1了。
+  在LRUCache析构时，会先将结点的引用计数再减1，如果此时引用计数为0，则调用deleter，并将该结点彻底从内存中free。在
+  Lookup时，如果查找接结点存在，此时引用计数会加1，也即是变成了3。此时，在用户持有该结点的期间，该缓存可能被删除（多
+  种原因，如：超过缓存容量触发回收、具有相同key的新缓存插入、整个缓存被析构等），导致用户访问到非法内存，程序崩溃。
+  因此，需要使用引用计数要加1来维护结点的生命周期。因为Lookup返回的是找到的结点，用户在查找完成后，要主动调用该结点
+  的Release或Erase来使引用计数从新变成2。
+  */
   // 引用计数
   uint32_t refs;     // a number of refs to this entry
                      // cache itself is counted as 1
@@ -328,6 +358,13 @@ class LRUCache
   double GetHighPriPoolRatio();
 
  private:
+ 
+/*  
+SharedLRUCache到底是什么呢？
+    我们为什么需要它？这是因为levelDB是多线程的，每个线程访问缓冲区的时候都会将缓冲区锁住，为了多线程访问，尽可能快速，
+减少锁开销，ShardedLRUCache内部有16个LRUCache，查找Key时首先计算key属于哪一个分片，分片的计算方法是取32位hash值的高4位，
+然后在相应的LRUCache中进行查找，这样就大大减少了多线程的访问锁的开销。
+*/
  //LRUCache::LRUCache
   LRUCacheShard* shards_ = nullptr;
   //多少个LRU hash桶
