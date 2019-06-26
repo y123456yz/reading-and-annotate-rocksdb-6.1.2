@@ -16,6 +16,7 @@ namespace rocksdb {
 
 class PinnedIteratorsManager;
 
+//TwoLevelIndexIteratorºÃ≥–∏√¿‡
 template <class TValue>
 class InternalIteratorBase : public Cleanable {
  public:

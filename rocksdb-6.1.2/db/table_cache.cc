@@ -182,6 +182,10 @@ Status TableCache::FindTable(const EnvOptions& env_options,
   return s;
 }
 
+
+// 参数file_number是文件编号，file_size是文件大小
+// 参数*tableptr指向Table对象，当然必须先判断tableptr是不是NULL
+// 返回某个.sst文件对应的Table对象的迭代器
 InternalIterator* TableCache::NewIterator(
     const ReadOptions& options, const EnvOptions& env_options,
     const InternalKeyComparator& icomparator, const FileMetaData& file_meta,
@@ -469,6 +473,7 @@ size_t TableCache::GetMemoryUsageByTableReader(
   return ret;
 }
 
+//当Compaction时，过期的文件将会被移除，此时调用Evict从移除该文件缓存。
 void TableCache::Evict(Cache* cache, uint64_t file_number) {
   cache->Erase(GetSliceForFileNumber(&file_number));
 }

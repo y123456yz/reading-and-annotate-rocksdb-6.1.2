@@ -75,12 +75,14 @@ class TwoLevelIndexIterator : public InternalIteratorBase<BlockHandle> {
   void InitDataBlock();
 
   TwoLevelIteratorState* state_;
+  //第一层迭代器，Index Block的block_data字段迭代器的代理
   IteratorWrapperBase<BlockHandle> first_level_iter_;
+  //第二层迭代器，Data Block的block_data字段迭代器的代理
   IteratorWrapperBase<BlockHandle> second_level_iter_;  // May be nullptr
   Status status_;
   // If second_level_iter is non-nullptr, then "data_block_handle_" holds the
   // "index_value" passed to block_function_ to create the second_level_iter.
-  BlockHandle data_block_handle_;
+  BlockHandle data_block_handle_; //handle中间变量
 };
 
 TwoLevelIndexIterator::TwoLevelIndexIterator(
@@ -88,10 +90,19 @@ TwoLevelIndexIterator::TwoLevelIndexIterator(
     InternalIteratorBase<BlockHandle>* first_level_iter)
     : state_(state), first_level_iter_(first_level_iter) {}
 
+// Index Block的block_data字段中，每一条记录的key都满足：
+// 大于上一个Data Block的所有key，并且小于后面所有Data Block的key
+// 因为Seek是查找key>=target的第一条记录，所以当index_iter_找到时，
+// 该index_inter_对应的data_iter_所管理的Data Block中所有记录的
+// key都小于target，需要在下一个Data Block中seek，而下一个Data Block
+// 中的第一条记录就满足key>=target
 void TwoLevelIndexIterator::Seek(const Slice& target) {
   first_level_iter_.Seek(target);
 
   InitDataBlock();
+   // data_iter_.Seek(target)必然会找不到，此时data_iter_.Valid()为false  
+   // 然后调用SkipEmptyDataBlocksForward定位到下一个Data Block，并定位到  
+   // 该Data Block的第一条记录，这条记录刚好就是要查找的那条记录
   if (second_level_iter_.iter() != nullptr) {
     second_level_iter_.Seek(target);
   }
@@ -116,6 +127,9 @@ void TwoLevelIndexIterator::SeekForPrev(const Slice& target) {
   }
 }
 
+
+// 因为index_block_options.block_restart_interval = 1
+// 所以这里是解析第一个Block Data的第一条记录
 void TwoLevelIndexIterator::SeekToFirst() {
   first_level_iter_.SeekToFirst();
   InitDataBlock();
@@ -125,6 +139,9 @@ void TwoLevelIndexIterator::SeekToFirst() {
   SkipEmptyDataBlocksForward();
 }
 
+
+// 因为index_block_options.block_restart_interval = 1
+// 所以这里是解析最后一个Block Data的最后一条记录
 void TwoLevelIndexIterator::SeekToLast() {
   first_level_iter_.SeekToLast();
   InitDataBlock();
@@ -146,6 +163,10 @@ void TwoLevelIndexIterator::Prev() {
   SkipEmptyDataBlocksBackward();
 }
 
+// 1.如果data_iter_.iter()为NULL，说明index_iter_.Valid()为为NULL时调用了  
+//   SetDataIterator(NULL)，此时直接返回，因为没数据可读啦  
+// 2.如果data_iter_.Valid()为false，说明当前Data Block的block_data字段读完啦  
+//   开始读下一个Data Block的block_data字段（从block_data第一条记录开始读）
 void TwoLevelIndexIterator::SkipEmptyDataBlocksForward() {
   while (second_level_iter_.iter() == nullptr ||
          (!second_level_iter_.Valid() && second_level_iter_.status().ok())) {
@@ -192,12 +213,16 @@ void TwoLevelIndexIterator::InitDataBlock() {
     if (second_level_iter_.iter() != nullptr &&
         !second_level_iter_.status().IsIncomplete() &&
         handle.offset() == data_block_handle_.offset()) {
+       // 如果data_iter_已经创建了，什么都不用干，这可以防止InitDataBlock被多次调用
       // second_level_iter is already constructed with this iterator, so
       // no need to change anything
     } else {
+    	// 创建Data Block中block_data字段的迭代器
       InternalIteratorBase<BlockHandle>* iter =
           state_->NewSecondaryIterator(handle);
+	 // 将handle转化为data_block_handle_
       data_block_handle_ = handle;
+	 // 将iter传给其代理data_inter_
       SetSecondLevelIterator(iter);
     }
   }
