@@ -35,6 +35,10 @@ namespace rocksdb {
 // If any errors are detected, returns nullptr.  Otherwise, returns a
 // pointer to the key delta (just past the three decoded values).
 struct DecodeEntry {
+  // 解析从block data的p位置开始的数据，将解析得到的shared、non_shared和value length
+  // 分别放到"*shared"、"*non_shared"和"*value_length"
+  // 从源码看出，p应该是一条记录的起始位置
+  // 如果解析错误，返回NULL。否则，返回指向一条记录的key_delta字段的指针
   inline const char* operator()(const char* p, const char* limit,
                                 uint32_t* shared, uint32_t* non_shared,
                                 uint32_t* value_length) {
@@ -45,6 +49,9 @@ struct DecodeEntry {
     *shared = reinterpret_cast<const unsigned char*>(p)[0];
     *non_shared = reinterpret_cast<const unsigned char*>(p)[1];
     *value_length = reinterpret_cast<const unsigned char*>(p)[2];
+
+	// 如果最高位都是0, 那么按照压缩规则，每个值只占一个字节，且小于128
+    // 这里相当于做了一个优化，如果三个值之和都小于128，那肯定是每个值只占一个字节
     if ((*shared | *non_shared | *value_length) < 128) {
       // Fast path: all three values are encoded in one byte each
       p += 3;
@@ -58,6 +65,9 @@ struct DecodeEntry {
 
     // Using an assert in place of "return null" since we should not pay the
     // cost of checking for corruption on every single key decoding
+    
+    // 如果limit中剩下的空间小于*non_shared、*value_length之和，说明limit中
+    // 已经容纳不下记录中的key_delta和value字段了
     assert(!(static_cast<uint32_t>(limit - p) < (*non_shared + *value_length)));
     return p;
   }
@@ -127,6 +137,7 @@ struct DecodeKeyV4 {
   }
 };
 
+// 向后解析比较简单，就是解析当前记录的下一个记录
 void DataBlockIter::Next() {
   assert(Valid());
   ParseNextDataKey<DecodeEntry>();
@@ -142,6 +153,12 @@ void IndexBlockIter::Next() {
   ParseNextIndexKey();
 }
 
+// 向前解析复杂一些，步骤如下  
+// 1.先向前查找当前记录之前的重启点  
+// 2.当循环到了第一个重启点，其偏移量（0）依然与当前记录的偏移量相等  
+//   说明当前记录就是第一条记录，此时初始化current_和restart_index_，并返回  
+// 3.调用SeekToRestartPoint定位到符合要求的启动点  
+// 4.向后循环解析，直到解析了原记录之前的一条记录，结束
 void IndexBlockIter::Prev() {
   assert(Valid());
   // Scan backwards to a restart point before current_
@@ -440,6 +457,7 @@ void DataBlockIter::SeekForPrev(const Slice& target) {
   }
 }
 
+// 解析block data的第一条记录
 void DataBlockIter::SeekToFirst() {
   if (data_ == nullptr) {  // Not init yet
     return;
@@ -464,11 +482,12 @@ void IndexBlockIter::SeekToFirst() {
   ParseNextIndexKey();
 }
 
+// 解析block data的最后一条记录
 void DataBlockIter::SeekToLast() {
   if (data_ == nullptr) {  // Not init yet
     return;
   }
-  SeekToRestartPoint(num_restarts_ - 1);
+  SeekToRestartPoint(num_restarts_ - 1); // 先定位到最后一个重启点
   while (ParseNextDataKey<DecodeEntry>() && NextEntryOffset() < restarts_) {
     // Keep skipping
   }
@@ -494,20 +513,22 @@ void BlockIter<TValue>::CorruptionError() {
 }
 
 template <typename DecodeEntryFunc>
+// 向后解析比较简单，就是解析当前记录的下一个记录
 bool DataBlockIter::ParseNextDataKey(const char* limit) {
   current_ = NextEntryOffset();
-  const char* p = data_ + current_;
-  if (!limit) {
+  const char* p = data_ + current_; // 指向当前记录
+  if (!limit) {// limit限制了记录存储区的范围
     limit = data_ + restarts_;  // Restarts come right after data
   }
 
   if (p >= limit) {
     // No more entries to return.  Mark as invalid.
-    current_ = restarts_;
+    current_ = restarts_; // 如果出错，恢复到默认值，并返回false
     restart_index_ = num_restarts_;
     return false;
   }
 
+  // 解析出记录中的key和value
   // Decode next entry
   uint32_t shared, non_shared, value_length;
   p = DecodeEntryFunc()(p, limit, &shared, &non_shared, &value_length);
@@ -552,6 +573,11 @@ bool DataBlockIter::ParseNextDataKey(const char* limit) {
     }
 
     value_ = Slice(p + non_shared, value_length);
+	// 如果你当前记录的偏移已经比下一个重启点的偏移还有大了	  
+	// 那么关键点索引restart_index_加1，且后面记录的解析都是	  
+	// 以这个重启点为参照的。	  
+	// 因为restart_index_=0的重启点就是block data的第一条记录	  
+	// 所以下一个重启点的索引是restart_index_ + 1
     if (shared == 0) {
       while (restart_index_ + 1 < num_restarts_ &&
              GetRestartPoint(restart_index_ + 1) < current_) {
@@ -650,6 +676,11 @@ void IndexBlockIter::DecodeCurrentValue(uint32_t shared) {
 // is either the last restart point with a key less than target,
 // which means the key of next restart point is larger than target, or
 // the first restart point with a key = target
+// 从左到右（从前到后）查找第一条key大于target的记录   
+// 1.二分查找，找到key < target的最后一个重启点  
+// 2.定位到该重启点，其索引由left指定，这是前面二分查找到的结果。如前面所分析的，  
+//   value_指向重启点的地址，而size_指定为0，这样ParseNextKey函数将会解析出重启点key和value。  
+// 3.自重启点线性向下查找，直到遇到key>=target的记录或者直到最后一条记录，也不满足key>=target，返回
 template <class TValue>
 template <typename DecodeKeyFunc>
 bool BlockIter<TValue>::BinarySeek(const Slice& target, uint32_t left,
@@ -663,7 +694,7 @@ bool BlockIter<TValue>::BinarySeek(const Slice& target, uint32_t left,
     uint32_t shared, non_shared;
     const char* key_ptr = DecodeKeyFunc()(
         data_ + region_offset, data_ + restarts_, &shared, &non_shared);
-    if (key_ptr == nullptr || (shared != 0)) {
+    if (key_ptr == nullptr || (shared != 0)) { // 需要注意的是重启点保存的key是完整的，所以它的shared字段等于0
       CorruptionError();
       return false;
     }
@@ -775,6 +806,9 @@ bool IndexBlockIter::PrefixSeek(const Slice& target, uint32_t* index) {
 }
 
 uint32_t Block::NumRestarts() const {
+  // size_为何要大于等于2*sizeof(uint32_t)，因为如果只调用BlockBuilder中  
+  // 的Finish函数，那么block data至少包含一个uint32_t类型的重启点位置信息和  
+  // 一个uint32_t类型的重启点个数信息  assert(size_ >= 2*sizeof(uint32_t));
   assert(size_ >= 2 * sizeof(uint32_t));
   uint32_t block_footer = DecodeFixed32(data_ + size_ - sizeof(uint32_t));
   uint32_t num_restarts = block_footer;
@@ -824,15 +858,19 @@ Block::Block(BlockContents&& contents, SequenceNumber _global_seqno,
       num_restarts_(0),
       global_seqno_(_global_seqno) {
   TEST_SYNC_POINT("Block::Block:0");
-  if (size_ < sizeof(uint32_t)) {
+  if (size_ < sizeof(uint32_t)) { // 出错时，使size_=0
     size_ = 0;  // Error marker
   } else {
     // Should only decode restart points for uncompressed blocks
     num_restarts_ = NumRestarts();
     switch (IndexType()) {
       case BlockBasedTableOptions::kDataBlockBinarySearch:
+	  	
+		// 总大小减去重启点信息的大小，重启点信息包括重启点位置数组和重启点个数，
+		// 他们都是uint32_t类型的
         restart_offset_ = static_cast<uint32_t>(size_) -
                           (1 + num_restarts_) * sizeof(uint32_t);
+		// 这里的条件判断是防止NumRestarts()返回值为负数
         if (restart_offset_ > size_ - sizeof(uint32_t)) {
           // The size is too small for NumRestarts() and therefore
           // restart_offset_ wrapped around.

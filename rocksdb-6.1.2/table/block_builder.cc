@@ -63,6 +63,9 @@ BlockBuilder::BlockBuilder(
     default:
       assert(0);
   }
+
+  //options->block_restart_interval表示当前重启点（其实也是一条记录）和上个重启点之间间隔了多少条记录。
+  //restarts_.push_back(0)，表示第一个重启点距离block data起始位置的偏移为0，也就是说第一条记录就是重启点。
   assert(block_restart_interval_ >= 1);
   restarts_.push_back(0);  // First restart point is at offset 0
   estimate_ = sizeof(uint32_t) + sizeof(uint32_t);
@@ -109,8 +112,10 @@ size_t BlockBuilder::EstimateSizeAfterKV(const Slice& key,
   return estimate;
 }
 
+//Finish只是在记录存储区后边添加了重启点信息，重启点信息没有进行压缩
 Slice BlockBuilder::Finish() {
   // Append restart array
+  // 添加重启点信息部分
   for (size_t i = 0; i < restarts_.size(); i++) {
     PutFixed32(&buffer_, restarts_[i]);
   }
@@ -132,6 +137,7 @@ Slice BlockBuilder::Finish() {
   return Slice(buffer_);
 }
 
+//构建block data数据存入buffer_
 void BlockBuilder::Add(const Slice& key, const Slice& value,
                        const Slice* const delta_value) {
   assert(!finished_);
@@ -140,6 +146,9 @@ void BlockBuilder::Add(const Slice& key, const Slice& value,
   size_t shared = 0;  // number of bytes shared with prev key
   if (counter_ >= block_restart_interval_) {
     // Restart compression
+    
+	// 如果counter_=options_->block_restart_interval，说明这条记录就是重启点。
+	// 将这条记录距离block data首地址的偏移添加到restarts_中，并使counter_ = 0，
     restarts_.push_back(static_cast<uint32_t>(buffer_.size()));
     estimate_ += sizeof(uint32_t);
     counter_ = 0;
@@ -173,6 +182,7 @@ void BlockBuilder::Add(const Slice& key, const Slice& value,
                                 static_cast<uint32_t>(value.size()));
   }
 
+  // 开始组建一条记录
   // Add string delta to buffer_ followed by value
   buffer_.append(key.data() + shared, non_shared);
   // Use value delta encoding only when the key has shared bytes. This would
@@ -194,3 +204,4 @@ void BlockBuilder::Add(const Slice& key, const Slice& value,
 }
 
 }  // namespace rocksdb
+

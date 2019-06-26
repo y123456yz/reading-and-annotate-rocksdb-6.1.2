@@ -141,6 +141,9 @@ class BlockReadAmpBitmap {
   uint32_t rnd_;
 };
 
+//block data的解析是通过Block类实现的。
+//block data的管理是读写分离的，读取后的遍历查询操作由Block类实现，block data的构建则由BlockBuilder类实现
+//图表记录详见https://blog.csdn.net/caoshangpa/article/details/78977743
 class Block {
  public:
   // Initialize the block with the specified contents.
@@ -227,7 +230,11 @@ class BlockIter : public InternalIteratorBase<TValue> {
                       SequenceNumber global_seqno, bool block_contents_pinned) {
     assert(data_ == nullptr);  // Ensure it is called only once
     assert(num_restarts > 0);  // Ensure the param is valid
-
+    /*
+    初始化迭代器时，为什么是把current设置为restarts，把restart_index_设置为num_restarts_？
+        创建一个Block::Itr之后，它是处于invalid状态的，即不能Prev也不能Next；只能先Seek/SeekToxxx之后，
+    才能调用next/prev。想想和std的iterator行为很像吧，比如你声明一个vector::iterator，必须先赋值才能使用。
+    */
     comparator_ = comparator;
     data_ = data;
     restarts_ = restarts;
@@ -289,13 +296,22 @@ class BlockIter : public InternalIteratorBase<TValue> {
   // Note: The type could be changed to InternalKeyComparator but we see a weird
   // performance drop by that.
   const Comparator* comparator_;
+  // block data
   const char* data_;       // underlying block contents
+
+  //重启点的位置和个数。元素restarts[i]存储的是block data第i个重启点距离block data首地址的偏移。
+  //很明显第一条记录，总是第一个重启点，也就是restarts[0] = 0。num_restarts是重启点的个数
+  // 重启点个数
   uint32_t num_restarts_;  // Number of uint32_t entries in restart array
 
   // Index of restart block in which current_ or current_-1 falls
-  uint32_t restart_index_;
+  uint32_t restart_index_;  // 重启点的索引
+  // 重启点信息在block data中的偏移  
   uint32_t restarts_;  // Offset of restart array (list of fixed32)
+
+  
   // current_ is offset in data_ of current entry.  >= restarts_ if !Valid
+  // current_是当前记录在bock data中的偏移，如果current_>=restarts_，说明出错啦。
   uint32_t current_;
   IterKey key_;
   Slice value_;
@@ -309,16 +325,23 @@ class BlockIter : public InternalIteratorBase<TValue> {
 
  public:
   // Return the offset in data_ just past the end of the current entry.
+  // 因为value_是一条记录的最后一个字段，所以这里返回的是下一条记录的偏移量，也就是current_  
+  // 但是如果在该函数之前调用了SeekToRestartPoint，此时的value_.data()=data_,value.size=0  
+  // 这样的话即使是block data的第一条记录，也可以用使用该函数，此时返回的偏移量为0
   inline uint32_t NextEntryOffset() const {
     // NOTE: We don't support blocks bigger than 2GB
     return static_cast<uint32_t>((value_.data() + value_.size()) - data_);
   }
 
+  // 获取第index个重启点的偏移
   uint32_t GetRestartPoint(uint32_t index) {
     assert(index < num_restarts_);
     return DecodeFixed32(data_ + restarts_ + index * sizeof(uint32_t));
   }
 
+  // 该函数只是设置了几个有限的状态，其它值将在函数ParseNextKey()中设置。  
+  // 需要注意的是，这里的value_并不是记录中的value字段，而只是一个指向记录起始位置的0长度指针，  
+  // 这样后面的ParseNextKey函数将会解析出重启点的value字段，并赋值到value_中。
   void SeekToRestartPoint(uint32_t index) {
     key_.Clear();
     restart_index_ = index;

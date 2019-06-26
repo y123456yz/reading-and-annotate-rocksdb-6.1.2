@@ -16,7 +16,8 @@
 #include "table/data_block_hash_index.h"
 
 namespace rocksdb {
-
+//block data的管理是读写分离的，读取后的遍历查询操作由Block类实现，block data的构建则由BlockBuilder类实现
+//图表记录详见https://blog.csdn.net/caoshangpa/article/details/78977743
 class BlockBuilder {
  public:
   BlockBuilder(const BlockBuilder&) = delete;
@@ -30,20 +31,26 @@ class BlockBuilder {
                         double data_block_hash_table_util_ratio = 0.75);
 
   // Reset the contents as if the BlockBuilder was just constructed.
-  void Reset();
+  void Reset();// 重置BlockBuilder
 
   // REQUIRES: Finish() has not been called since the last call to Reset().
   // REQUIRES: key is larger than any previously added key
+  
+  // Add的调用应该在Reset之后，在Finish之前。
+  // Add只添加KV对（一条记录）,重启点信息部分由Finish添加。
+  // 每次调用Add时，key应该越来越大。
   void Add(const Slice& key, const Slice& value,
            const Slice* const delta_value = nullptr);
 
   // Finish building the block and return a slice that refers to the
   // block contents.  The returned slice will remain valid for the
   // lifetime of this builder or until Reset() is called.
+  // 组建block data完成，返回block data
   Slice Finish();
 
   // Returns an estimate of the current (uncompressed) size of the block
   // we are building.
+  // 估算当前block data的大小
   inline size_t CurrentSizeEstimate() const {
     return estimate_ + (data_block_hash_index_builder_.Valid()
                             ? data_block_hash_index_builder_.EstimateSize()
@@ -54,20 +61,32 @@ class BlockBuilder {
   size_t EstimateSizeAfterKV(const Slice& key, const Slice& value) const;
 
   // Return true iff no entries have been added since the last Reset()
+  // 是否已经开始组建block data
   bool empty() const { return buffer_.empty(); }
 
  private:
+  //block_restart_interval表示当前重启点（其实也是一条记录）和上个重启点之间间隔了多少条记录
   const int block_restart_interval_;
   // TODO(myabandeh): put it into a separate IndexBlockBuilder
   const bool use_delta_encoding_;
   // Refer to BlockIter::DecodeCurrentValue for format of delta encoded values
   const bool use_value_delta_encoding_;
 
+  /* 一个问题，既然通过Comparator可以极大的节省key的存储空间，那为什么又要使用重启点机制来额外占用一下空间呢？
+  这是因为如果最开头的记录数据损坏，其后的所有记录都将无法恢复。为了降低这个风险，引入了重启点，每隔固定
+  条数记录会强制加入一个重启点，这个位置的Entry会完整的记录自己的Key。
+  */
+
+  // 用于存放block data
   std::string buffer_;              // Destination buffer
+  // 用于存放重启点的位置信息
   std::vector<uint32_t> restarts_;  // Restart points
   size_t estimate_;
+  // 从上个重启点遍历到下个重启点时的计数
   int counter_;    // Number of entries emitted since restart
+  // 是否调用了Finish
   bool finished_;  // Has Finish() been called?
+  // 记录最后Add的key
   std::string last_key_;
   DataBlockHashIndexBuilder data_block_hash_index_builder_;
 };
