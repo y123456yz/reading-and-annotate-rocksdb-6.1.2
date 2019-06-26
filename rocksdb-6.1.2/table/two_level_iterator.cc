@@ -19,6 +19,8 @@ namespace rocksdb {
 
 namespace {
 
+//NewTwoLevelIterator中new该类，可以参考https://blog.csdn.net/caoshangpa/article/details/79046942
+//NewIterator用于创建Table的迭代器，此迭代器是一个双层迭代器
 class TwoLevelIndexIterator : public InternalIteratorBase<BlockHandle> {
  public:
   explicit TwoLevelIndexIterator(
@@ -203,6 +205,7 @@ void TwoLevelIndexIterator::InitDataBlock() {
 
 }  // namespace
 
+//NewIterator用于创建Table的迭代器，此迭代器是一个双层迭代器
 InternalIteratorBase<BlockHandle>* NewTwoLevelIterator(
     TwoLevelIteratorState* state,
     InternalIteratorBase<BlockHandle>* first_level_iter) {

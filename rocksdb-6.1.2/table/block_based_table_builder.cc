@@ -276,15 +276,21 @@ class BlockBasedTableBuilder::BlockBasedTablePropertiesCollector
   bool prefix_filtering_;
 };
 
+//
+//BlockBasedTableBuilder.rep_为该结构成员
+//Rep中不仅接管了各种Block的生成细节，而且还会记录生成Block需要的一些统计信息。因此我们可以认为，TableBuilder只不过是对Block的一层浅封装，真正做事情的是Rep。
 struct BlockBasedTableBuilder::Rep {
   const ImmutableCFOptions ioptions;
   const MutableCFOptions moptions;
   const BlockBasedTableOptions table_options;
   const InternalKeyComparator& internal_comparator;
+  //要生成的.sst文件
   WritableFileWriter* file;
+  //累加每个Data Block的偏移量
   uint64_t offset = 0;
   Status status;
   size_t alignment;
+  //存储KV对的数据块
   BlockBuilder data_block;
   // Buffers uncompressed data blocks and keys to replay later. Needed when
   // compression dictionary is enabled so we can finalize the dictionary before
@@ -299,6 +305,7 @@ struct BlockBasedTableBuilder::Rep {
   std::unique_ptr<IndexBuilder> index_builder;
   PartitionedIndexBuilder* p_index_builder_ = nullptr;
 
+  //上一个插入的key值，新插入的key必须比它大，保证.sst文件中的key是从小到大排列的
   std::string last_key;
   CompressionType compression_type;
   uint64_t sample_for_compression;
@@ -341,9 +348,11 @@ struct BlockBasedTableBuilder::Rep {
   std::unique_ptr<FilterBlockBuilder> filter_builder;
   char compressed_cache_key_prefix[BlockBasedTable::kMaxCacheKeyPrefixSize];
   size_t compressed_cache_key_prefix_size;
-
+  
+  //BlockHandle只有offset_和size_两个变量，用来记录每个Data Block在.sst文件中的偏移量和大小
   BlockHandle pending_handle;  // Handle to add to index block
-
+  
+  //Data Block的block_data字段压缩后的结果
   std::string compressed_output;
   std::unique_ptr<FlushBlockPolicy> flush_block_policy;
   uint32_t column_family_id;
@@ -568,11 +577,13 @@ void BlockBasedTableBuilder::Add(const Slice& key, const Slice& value) {
   }
 }
 
+//当一个Data Block大小超过设定值（默认为4K）时，执行Flush()操作。
 void BlockBasedTableBuilder::Flush() {
   Rep* r = rep_;
   assert(rep_->state != Rep::State::kClosed);
   if (!ok()) return;
   if (r->data_block.empty()) return;
+  //Flush函数先调用WriteBlock向文件添加数据，然后执行file的Flush()函数将文件写入磁盘。
   WriteBlock(&r->data_block, &r->pending_handle, true /* is_data_block */);
 }
 
@@ -583,6 +594,7 @@ void BlockBasedTableBuilder::WriteBlock(BlockBuilder* block,
   block->Reset();
 }
 
+//WriteBlock函数实际上就是把block_data进行压缩（如果支持），然后包装成完整的Block Data，并记录一些统计信息。
 void BlockBasedTableBuilder::WriteBlock(const Slice& raw_block_contents,
                                         BlockHandle* handle,
                                         bool is_data_block) {
@@ -1112,6 +1124,11 @@ Status BlockBasedTableBuilder::Finish() {
   Rep* r = rep_;
   assert(r->state != Rep::State::kClosed);
   bool empty_data_block = r->data_block.empty();
+
+  
+  // 为何要调用一次Flush，是因为调用Finish的时候，
+  // block_data不一定大于等于block_size，所以要调用Flush
+  // 将这部分block_data写入到磁盘
   Flush();
   if (r->state == Rep::State::kBuffered) {
     EnterUnbuffered();
@@ -1139,11 +1156,12 @@ Status BlockBasedTableBuilder::Finish() {
   WriteRangeDelBlock(&meta_index_builder);
   WritePropertiesBlock(&meta_index_builder);
   if (ok()) {
-    // flush the meta index block
+    // flush the meta index block  
+    // metaindex_block_handle记录了Meta Index Block的偏移和大小
     WriteRawBlock(meta_index_builder.Finish(), kNoCompression,
                   &metaindex_block_handle);
   }
-  if (ok()) {
+  if (ok()) {  // 组建Footer，并添加到文件结尾
     WriteFooter(metaindex_block_handle, index_block_handle);
   }
   r->state = Rep::State::kClosed;

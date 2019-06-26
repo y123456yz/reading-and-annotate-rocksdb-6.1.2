@@ -114,6 +114,45 @@ struct TableBuilderOptions {
 // external synchronization, but if any of the threads may call a
 // non-const method, all threads accessing the same TableBuilder must use
 // external synchronization.
+/*
+Table也叫SSTable（Sorted String Table），是数据在.sst文件中的存储形式,rocksdb通过TableBuilder类来构建每一个.sst文件。Table的逻辑结构如下所示，
+包括存储数据的Block，存储索引信息的Block，存储Filter的Block：
+
+Footer：为于Table尾部，记录指向Metaindex Block的Handle和指向Index Block的Handle。需要说明的是Table中
+所有的Handle是通过偏移量Offset以及Size一同来表示的，用来指明所指向的Block位置。Footer是SST文件解析开始的地方，
+通过Footer中记录的这两个关键元信息Block的位置，可以方便的开启之后的解析工作。另外Footer种还记录了用于验证文
+件是否为合法SST文件的常数值Magicnum。
+
+Index Block：记录Data Block位置信息的Block，其中的每一条Entry指向一个Data Block，其Key值为所指向的Data Block最
+后一条数据的Key，Value为指向该Data Block位置的Handle。
+
+Metaindex Block：与Index Block类似，由一组Handle组成，不同的是这里的Handle指向的Meta Block。
+
+Data Block：以Key-Value的方式存储实际数据，其中Key定义为：
+ DataBlock Key := UserKey + SequenceNum + Type
+ Type := kDelete or kValue
+ 对比Memtable中的Key，可以发现Data Block中的Key并没有拼接UserKey的长度在UserKey前，这是由于物理结构
+ 中已经有了Key的长度信息。
+
+Meta Block：比较特殊的Block，用来存储元信息，目前rocksdb使用的仅有对布隆过滤器的存储。写入Data Block的数据会
+同时更新对应Meta Block中的过滤器。读取数据时也会首先经过布隆过滤器（Bloom Filter）过滤BloomFilter——大规模数据处理利器(https://blog.csdn.net/caoshangpa/article/details/79049678)。
+Meta Block的物理结构也与其他Block有所不同：
+[filter 0] 
+[filter 1]  
+[filter 2]  
+...  
+[filter N-1]  
+[offset of filter 0] : 4 bytes  
+[offset of filter 1] : 4 bytes  
+[offset of filter 2] : 4 bytes  
+...  
+[offset of filter N-1] : 4 bytes  
+[offset of beginning of offset array] : 4 bytes  
+lg(base) : 1 byte
+其中每个filter节对应一段Key Range，落在某个Key Range的Key需要到对应的filter节中查找自己的过滤信息，base指定这个Range的大小。
+*/
+//Rep中不仅接管了各种Block的生成细节，而且还会记录生成Block需要的一些统计信息。因此我们可以认为，TableBuilder只不过是对Block的一层浅封装，真正做事情的是Rep。
+//BlockBasedTableBuilder继承该类
 class TableBuilder {
  public:
   // REQUIRES: Either Finish() or Abandon() has been called.
@@ -122,6 +161,7 @@ class TableBuilder {
   // Add key,value to the table being constructed.
   // REQUIRES: key is after any previously added key according to comparator.
   // REQUIRES: Finish(), Abandon() have not been called
+  //TableBuilder中的Add函数本质上不过是对Rep中BlockBuilder的Add函数的调用。例如BlockBasedTableBuilder::Add
   virtual void Add(const Slice& key, const Slice& value) = 0;
 
   // Return non-ok iff some error has been detected.

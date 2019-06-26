@@ -123,8 +123,9 @@ class BlockBasedTableBuilder : public TableBuilder {
   struct Rep;
   class BlockBasedTablePropertiesCollectorFactory;
   class BlockBasedTablePropertiesCollector;
-  Rep* rep_;
-
+  //TableBuilder::Rep¿‡–Õ
+  Rep* rep_; 
+  
   // Advanced operation: flush any buffered key/value pairs to file.
   // Can be used to ensure that two adjacent entries never live in
   // the same data block.  Most clients should not need to use this method.

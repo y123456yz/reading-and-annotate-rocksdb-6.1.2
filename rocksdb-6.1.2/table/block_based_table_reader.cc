@@ -767,6 +767,8 @@ Slice BlockBasedTable::GetCacheKey(const char* cache_key_prefix,
   return Slice(cache_key, static_cast<size_t>(end - cache_key));
 }
 
+//打开一个本地.sst文件，然后从文件尾部读取footer，根据footer中的index_handle，调用ReadBock函数读取index_block。
+//接着对结构体Rep赋值，并将其当做参数传给Table的构造函数。
 Status BlockBasedTable::Open(const ImmutableCFOptions& ioptions,
                              const EnvOptions& env_options,
                              const BlockBasedTableOptions& table_options,
