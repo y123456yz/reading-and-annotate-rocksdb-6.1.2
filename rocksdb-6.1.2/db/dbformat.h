@@ -85,6 +85,16 @@ static const SequenceNumber kMaxSequenceNumber = ((0x1ull << 56) - 1);
 
 static const SequenceNumber kDisableGlobalSequenceNumber = port::kMaxUint64;
 
+//InternalKey和ParsedInternalKey区别?
+//1. InternalKey（class InternalKey）是一个复合概念，是有几个部分组合成的一个key，
+//  ParsedInternalKey（struct ParsedInternalKey）就是对InternalKey分拆后的结果
+//2. InternalKey 是一个只存储了一个string，它使用一个 DecodeFrom() 函数将Slice类型的InternalKey
+//  解码出string类型的InternalKey. 也就是说InternalKey是由User_key.data + SequenceNumber + ValueType
+//  组合而成的，顺便先分析下几个Key相关的函数，它们是了解Internal Key和User Key的关键。
+//3. InternalKey和ParsedInternalKey相互转换的两个函数，如下。
+//  Inline bool ParseInternalKey()将internal_key（Slice）解析出来为result
+//  AppendInternalKey() 将key（ParsedInternalKey）序列化为result（Internel key）
+//
 //解码获取成员值见ParseInternalKey
 struct ParsedInternalKey {
   Slice user_key;
@@ -197,6 +207,17 @@ class InternalKeyComparator
 // Modules in this directory should keep internal keys wrapped inside
 // the following class instead of plain strings so that we do not
 // incorrectly use string comparisons instead of an InternalKeyComparator.
+
+//InternalKey和ParsedInternalKey区别?
+//1. InternalKey（class InternalKey）是一个复合概念，是有几个部分组合成的一个key，
+//  ParsedInternalKey（struct ParsedInternalKey）就是对InternalKey分拆后的结果
+//2. InternalKey 是一个只存储了一个string，它使用一个 DecodeFrom() 函数将Slice类型的InternalKey
+//  解码出string类型的InternalKey. 也就是说InternalKey是由User_key.data + SequenceNumber + ValueType
+//  组合而成的，顺便先分析下几个Key相关的函数，它们是了解Internal Key和User Key的关键。
+//3. InternalKey和ParsedInternalKey相互转换的两个函数，如下。
+//  Inline bool ParseInternalKey()将internal_key（Slice）解析出来为result
+//  AppendInternalKey() 将key（ParsedInternalKey）序列化为result（Internel key）
+
 class InternalKey {
  private:
   std::string rep_;

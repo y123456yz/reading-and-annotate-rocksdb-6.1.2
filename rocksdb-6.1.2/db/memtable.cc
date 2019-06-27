@@ -77,6 +77,7 @@ MemTable::MemTable(const InternalKeyComparator& cmp,
                  ? &mem_tracker_
                  : nullptr,
              mutable_cf_options.memtable_huge_page_size),
+      //实际上是跳跃表
       table_(ioptions.memtable_factory->CreateMemTableRep(
           comparator_, &arena_, mutable_cf_options.prefix_extractor.get(),
           ioptions.info_log, column_family_id)),
@@ -503,7 +504,7 @@ bool MemTable::Add(SequenceNumber s, ValueType type,
         return res;
       }
     } else {
-      //KV添加到跳跃表中
+      //KV添加到跳跃表中 SkipListRep::InsertKey
       bool res = table->InsertKey(handle);
       if (UNLIKELY(!res)) {
         return res;

@@ -38,6 +38,7 @@ public:
    skip_list_.Insert(static_cast<char*>(handle));
  }
 
+//MemTable::Add
  bool InsertKey(KeyHandle handle) override {
    return skip_list_.Insert(static_cast<char*>(handle));
  }

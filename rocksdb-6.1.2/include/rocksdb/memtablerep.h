@@ -53,6 +53,30 @@ typedef void* KeyHandle;
 
 extern Slice GetLengthPrefixedSlice(const char* data);
 
+/*
+Db_memtable_test.cc (db):class MockMemTableRep : public MemTableRep {
+Db_memtable_test.cc (db):class MockMemTableRepFactory : public MemTableRepFactory {
+Db_test_util.h (db):class SpecialMemTableRep : public MemTableRep {
+Db_test_util.h (db):class SpecialSkipListFactory : public MemTableRepFactory {
+Hash_linklist_rep.cc (memtable):class HashLinkListRep : public MemTableRep {
+Hash_linklist_rep.cc (memtable):  class FullListIterator : public MemTableRep::Iterator {
+Hash_linklist_rep.cc (memtable):  class LinkListIterator : public MemTableRep::Iterator {
+Hash_linklist_rep.cc (memtable):  class EmptyIterator : public MemTableRep::Iterator {
+Hash_linklist_rep.h (memtable):class HashLinkListRepFactory : public MemTableRepFactory {
+Hash_skiplist_rep.cc (memtable):class HashSkipListRep : public MemTableRep {
+Hash_skiplist_rep.cc (memtable):  class Iterator : public MemTableRep::Iterator {
+Hash_skiplist_rep.cc (memtable):  class EmptyIterator : public MemTableRep::Iterator {
+Hash_skiplist_rep.h (memtable):class HashSkipListRepFactory : public MemTableRepFactory {
+Memtable.h (db):  struct KeyComparator : public MemTableRep::KeyComparator {
+Memtablerep.h (include\rocksdb):class SkipListFactory : public MemTableRepFactory {
+Memtablerep.h (include\rocksdb):class VectorRepFactory : public MemTableRepFactory {
+Skiplistrep.cc (memtable):class SkipListRep : public MemTableRep {
+Skiplistrep.cc (memtable):  class Iterator : public MemTableRep::Iterator {
+Skiplistrep.cc (memtable):  class LookaheadIterator : public MemTableRep::Iterator {
+Vectorrep.cc (memtable):class VectorRep : public MemTableRep {
+Vectorrep.cc (memtable):  class Iterator : public MemTableRep::Iterator {
+*/
+//SkipListRepµ»ºÃ≥–∏√¿‡
 class MemTableRep {
  public:
   // KeyComparator provides a means to compare keys, which are internal keys

@@ -35,6 +35,18 @@ class Mutex;
 class MemTableIterator;
 class MergeContext;
 
+/*
+    在LevelDB中所有KV数据都是存储在Memtable，Immutable Memtable和SSTable中的，Immutable Memtable从结构上讲和Memtable
+是完全一样的，区别仅仅在于其是只读的，不允许写入操作，而Memtable则是允许写入和读取的。当Memtable写入的数据占用内存到
+达指定数量，则自动转换为Immutable Memtable，等待Dump到磁盘中，系统会自动生成新的Memtable供写操作写入新数据，理解了Memtable，
+那么Immutable Memtable自然不在话下。
+    LevelDB的MemTable提供了将KV数据写入，删除以及读取KV记录的操作接口，但是事实上Memtable并不存在真正的删除操作，删除某个
+Key的Value在Memtable内是作为插入一条记录实施的，但是会打上一个Key的删除标记，真正的删除操作是延后的，会在以后的Compaction过
+程中去掉这个KV。 需要注意的是，LevelDB的Memtable中KV对是根据Key大小有序存储的，在系统插入新的KV时，LevelDB要把这个KV插到合
+适的位置上以保持这种Key有序性。其实，LevelDb的Memtable类只是一个接口类，真正的操作是通过背后的SkipList来做的，包括插入操作
+和读取操作等，所以Memtable的核心数据结构是一个SkipList。
+    Memtable主要作用是对skiplist、arena、comparator进行组合和管理，接口函数屏蔽了底层操作，对使用者更加优雅。
+*/
 struct ImmutableMemTableOptions {
   explicit ImmutableMemTableOptions(const ImmutableCFOptions& ioptions,
                                     const MutableCFOptions& mutable_cf_options);
@@ -169,6 +181,7 @@ class MemTable {
   // arena: If not null, the arena needs to be used to allocate the Iterator.
   //        Calling ~Iterator of the iterator will destroy all the states but
   //        those allocated in arena.
+  //NewIterator是返回一个迭代器，可以遍历访问memtable的内部数据
   InternalIterator* NewIterator(const ReadOptions& read_options, Arena* arena);
 
   FragmentedRangeTombstoneIterator* NewRangeTombstoneIterator(
@@ -183,6 +196,7 @@ class MemTable {
   //
   // Returns false if MemTableRepFactory::CanHandleDuplicatedKey() is true and
   // the <key, seq> already exists.
+  //Add和Get是添加和获取记录的接口，没有Delete，memtable的delete实际上是插入一条type为kTypeDeletion的记录。
   bool Add(SequenceNumber seq, ValueType type, const Slice& key,
            const Slice& value, bool allow_concurrent = false,
            MemTablePostProcessInfo* post_process_info = nullptr);
@@ -200,6 +214,7 @@ class MemTable {
   // returned).  Otherwise, *seq will be set to kMaxSequenceNumber.
   // On success, *s may be set to OK, NotFound, or MergeInProgress.  Any other
   // status returned indicates a corruption or other unexpected error.
+  //Add和Get是添加和获取记录的接口，没有Delete，memtable的delete实际上是插入一条type为kTypeDeletion的记录。
   bool Get(const LookupKey& key, std::string* value, Status* s,
            MergeContext* merge_context,
            SequenceNumber* max_covering_tombstone_seq, SequenceNumber* seq,
@@ -426,6 +441,8 @@ class MemTable {
   const size_t kArenaBlockSize;
   AllocTracker mem_tracker_;
   ConcurrentArena arena_;
+
+  //实际上是跳跃表
   std::unique_ptr<MemTableRep> table_;
   std::unique_ptr<MemTableRep> range_del_table_;
   std::atomic_bool is_range_del_table_empty_;

@@ -89,6 +89,9 @@ void UnPackSequenceAndType(uint64_t packed, uint64_t* seq, ValueType* t) {
   assert(IsExtendedValueType(*t));
 }
 
+//  Inline bool ParseInternalKey()将internal_key（Slice）解析出来为result
+//  AppendInternalKey() 将key（ParsedInternalKey）序列化为result（Internel key）
+
 //AppendInternalKey函数先把user_key添加到*result中，然后用PackSequenceAndType函数将sequence和type打包，并将打包的结果添加到*result中。
 void AppendInternalKey(std::string* result, const ParsedInternalKey& key) {
   result->append(key.user_key.data(), key.user_key.size());

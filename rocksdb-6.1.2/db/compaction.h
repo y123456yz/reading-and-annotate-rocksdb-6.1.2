@@ -64,6 +64,9 @@ class VersionStorageInfo;
 class CompactionFilter;
 
 // A Compaction encapsulates information about a compaction.
+/*
+Memtable提供了写入KV记录，删除以及读取KV记录的接口，但是事实上Memtable并不执行真正的删除操作,删除某个Key的Value在Memtable内是作为插入一条记录实施的，但是会打上一个Key的删除标记，真正的删除操作在后面的 Compaction过程中，lazy delete(--GL--总结的不错) 。
+*/
 class Compaction {
  public:
   Compaction(VersionStorageInfo* input_version,

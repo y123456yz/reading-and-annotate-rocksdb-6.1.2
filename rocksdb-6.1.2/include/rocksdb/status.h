@@ -21,6 +21,14 @@
 
 namespace rocksdb {
 
+/*
+返回状态，将错误号和错误信息封装成Status类，统一进行处理。并定义了几种具体的返回状态，如成功或者文件不存在等。
+为了节省空间Status并没有用std::string来存储错误信息，而是将返回码(code), 错误信息message及长度打包存储于一个字符串数组中。
+成功状态OK 是NULL state_，否则state_ 是一个包含如下信息的数组:  
+	state_[0..3] == 消息length of message 
+	state_[4]    == 消息code
+	state_[5..]  ==消息message 
+*/
 class Status {
  public:
   // Create a success status.

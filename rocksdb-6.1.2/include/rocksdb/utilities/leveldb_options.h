@@ -79,6 +79,8 @@ struct LevelDBOptions {
   // the next time the database is opened.
   //
   // Default: 4MB
+  //如果Memtable中的数据占用内存到达指定值(Options.write_buffer_size) size_t write_buffer_size;，
+  //则rocksdb就自动将Memtable转换为immutable Memtable，并自动生成新的Memtable
   size_t write_buffer_size;
 
   // Number of open files that can be used by the DB.  You may need to
