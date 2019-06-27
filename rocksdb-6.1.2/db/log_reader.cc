@@ -50,22 +50,28 @@ Reader::~Reader() {
 //
 // TODO krad: Evaluate if we need to move to a more strict mode where we
 // restrict the inconsistency to only the last log
+//从日志文件读取record
 bool Reader::ReadRecord(Slice* record, std::string* scratch,
                         WALRecoveryMode wal_recovery_mode) {
   scratch->clear();
   record->clear();
+  // 当前是否在fragment内，也就是遇到了FIRST 类型的record
   bool in_fragmented_record = false;
   // Record offset of the logical record that we're reading
   // 0 is a dummy value to make compilers happy
+  // 我们正在读取的逻辑record的偏移
   uint64_t prospective_record_offset = 0;
 
   Slice fragment;
+  //读取出现错误时，并不会退出循环，而是汇报错误，继续执行，直到成功读取一条user record，或者遇到文件结尾。
   while (true) {
+  	//physical_record_offset存储的是当前正在读取的record的偏移值
     uint64_t physical_record_offset = end_of_buffer_offset_ - buffer_.size();
     size_t drop_size = 0;
+	//从日志文件读取完整的record
     const unsigned int record_type = ReadPhysicalRecord(&fragment, &drop_size);
     switch (record_type) {
-      case kFullType:
+      case kFullType: //表明是一条完整的log record，成功返回读取的user record数据。
       case kRecyclableFullType:
         if (in_fragmented_record && !scratch->empty()) {
           // Handle bug in earlier versions of log::Writer where
@@ -75,12 +81,14 @@ bool Reader::ReadRecord(Slice* record, std::string* scratch,
           ReportCorruption(scratch->size(), "partial record without end(1)");
         }
         prospective_record_offset = physical_record_offset;
-        scratch->clear();
+        scratch->clear(); // 清空scratch，读取成功不需要返回scratch数据
         *record = fragment;
+		// 更新last record offset
         last_record_offset_ = prospective_record_offset;
         return true;
 
-      case kFirstType:
+	  //把数据读取到scratch中，直到成功读取了LAST类型的log record，才把数据返回到result中，继续下次的读取循环。
+      case kFirstType: //表明是一系列logrecord(fragment)的第一个record。
       case kRecyclableFirstType:
         if (in_fragmented_record && !scratch->empty()) {
           // Handle bug in earlier versions of log::Writer where
@@ -91,7 +99,7 @@ bool Reader::ReadRecord(Slice* record, std::string* scratch,
         }
         prospective_record_offset = physical_record_offset;
         scratch->assign(fragment.data(), fragment.size());
-        in_fragmented_record = true;
+        in_fragmented_record = true; //说明该record在多个block中
         break;
 
       case kMiddleType:
@@ -106,7 +114,7 @@ bool Reader::ReadRecord(Slice* record, std::string* scratch,
 
       case kLastType:
       case kRecyclableLastType:
-        if (!in_fragmented_record) {
+        if (!in_fragmented_record) { //说明是一系列log record(fragment)中的最后一条。如果不在fragment中，报告错误。
           ReportCorruption(fragment.size(),
                            "missing start of fragmented record(2)");
         } else {
@@ -124,7 +132,7 @@ bool Reader::ReadRecord(Slice* record, std::string* scratch,
         }
         FALLTHROUGH_INTENDED;
 
-      case kEof:
+      case kEof: //遇到文件结尾kEof，返回false。不返回任何结果。
         if (in_fragmented_record) {
           if (wal_recovery_mode == WALRecoveryMode::kAbsoluteConsistency) {
             // in clean shutdown we don't expect any error in the log files
@@ -137,7 +145,7 @@ bool Reader::ReadRecord(Slice* record, std::string* scratch,
         }
         return false;
 
-      case kOldRecord:
+      case kOldRecord:  
         if (wal_recovery_mode != WALRecoveryMode::kSkipAnyCorruptedRecords) {
           // Treat a record from a previous instance of the log as EOF.
           if (in_fragmented_record) {
@@ -154,7 +162,7 @@ bool Reader::ReadRecord(Slice* record, std::string* scratch,
         }
         FALLTHROUGH_INTENDED;
 
-      case kBadRecord:
+      case kBadRecord: //非法的record(kBadRecord)，如果在fragment中，则报告错误。
         if (in_fragmented_record) {
           ReportCorruption(scratch->size(), "error in middle of record");
           in_fragmented_record = false;
@@ -182,7 +190,7 @@ bool Reader::ReadRecord(Slice* record, std::string* scratch,
         }
         break;
 
-      default: {
+      default: { //缺省分支，遇到非法的record 类型，报告错误，清空scratch。
         char buf[40];
         snprintf(buf, sizeof(buf), "unknown record type %u", record_type);
         ReportCorruption(
@@ -275,24 +283,27 @@ void Reader::ReportDrop(size_t bytes, const Status& reason) {
   }
 }
 
+//Reader::ReadPhysicalRecord
 bool Reader::ReadMore(size_t* drop_size, int *error) {
-  if (!eof_ && !read_error_) {
+  if (!eof_ && !read_error_) { //如果eof_为false，表明还没有到文件结尾，清空buffer，并读取数据。
     // Last read was a full read, so this is a trailer to skip
-    buffer_.clear();
+    buffer_.clear(); // 因为上次肯定读取了一个完整的record
     Status status = file_->Read(kBlockSize, &buffer_, backing_store_);
+	// 更新buffer读取偏移值
     end_of_buffer_offset_ += buffer_.size();
-    if (!status.ok()) {
+    if (!status.ok()) { // 读取失败，设置eof_为true，报告错误并返回kEof
       buffer_.clear();
       ReportDrop(kBlockSize, status);
       read_error_ = true;
       *error = kEof;
       return false;
     } else if (buffer_.size() < static_cast<size_t>(kBlockSize)) {
+     // 实际读取字节<指定(Block Size)，表明到了文件结尾
       eof_ = true;
       eof_offset_ = buffer_.size();
     }
     return true;
-  } else {
+  } else { //eof_为true，buffer不为空，说明文件结尾包含了一个不完整的record，报告错误，返回kEof。
     // Note that if buffer_ is non-empty, we have a truncated header at the
     //  end of the file, which can be caused by the writer crashing in the
     //  middle of writing the header. Unless explicitly requested we don't
@@ -309,6 +320,8 @@ bool Reader::ReadMore(size_t* drop_size, int *error) {
   }
 }
 
+//调用SequentialFile的Read接口，从文件读取数据。
+//读取到一个完整的record。读取的内容存放在成员变量buffer_中。
 unsigned int Reader::ReadPhysicalRecord(Slice* result, size_t* drop_size) {
   while (true) {
     // We need at least the minimum header size
@@ -351,7 +364,7 @@ unsigned int Reader::ReadPhysicalRecord(Slice* result, size_t* drop_size) {
     if (header_size + length > buffer_.size()) {
       *drop_size = buffer_.size();
       buffer_.clear();
-      if (!eof_) {
+      if (!eof_) { // 长度超出了
         return kBadRecordLen;
       }
       // If the end of the file has been reached without reading |length|
@@ -363,18 +376,18 @@ unsigned int Reader::ReadPhysicalRecord(Slice* result, size_t* drop_size) {
       return kEof;
     }
 
-    if (type == kZeroType && length == 0) {
+    if (type == kZeroType && length == 0) { // 对于Zero Type类型，不汇报错误
       // Skip zero length record without reporting any drops since
       // such records are produced by the mmap based writing code in
       // env_posix.cc that preallocates file regions.
       // NOTE: this should never happen in DB written by new RocksDB versions,
       // since we turn off mmap writes to manifest and log files
       buffer_.clear();
-      return kBadRecord;
+      return kBadRecord;// 依然返回kBadRecord
     }
 
     // Check crc
-    if (checksum_) {
+    if (checksum_) { //校验CRC32，如果校验出错，则汇报错误，并返回kBadRecord。
       uint32_t expected_crc = crc32c::Unmask(DecodeFixed32(header));
       uint32_t actual_crc = crc32c::Value(header + 6, length + header_size - 6);
       if (actual_crc != expected_crc) {
@@ -391,6 +404,8 @@ unsigned int Reader::ReadPhysicalRecord(Slice* result, size_t* drop_size) {
     buffer_.remove_prefix(header_size + length);
 
     *result = Slice(header + header_size, length);
+
+	//返回type
     return type;
   }
 }

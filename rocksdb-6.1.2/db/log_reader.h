@@ -92,13 +92,18 @@ class Reader {
 
  protected:
   std::shared_ptr<Logger> info_log_;
+  //文件读取类
   const std::unique_ptr<SequentialFileReader> file_;
+  //汇报错误的class Reporter
   Reporter* const reporter_;
   bool const checksum_;
   char* const backing_store_;
 
   // Internal state variables used for reading records
+  // 读取的内容
   Slice buffer_;
+  // 上次Read()返回长度< kBlockSize，暗示到了文件结尾EOF 
+  // 因为Read()每次读一个块（kBlockSize）大小。
   bool eof_;   // Last Read() indicated EOF by returning < kBlockSize
   bool read_error_;   // Error occurred while reading from file
 
@@ -107,8 +112,10 @@ class Reader {
   size_t eof_offset_;
 
   // Offset of the last record returned by ReadRecord.
+  // 函数ReadRecord()返回的上一个record的偏移
   uint64_t last_record_offset_;
   // Offset of the first location past the end of buffer_.
+  //当前的读取偏移
   uint64_t end_of_buffer_offset_;
 
   // which log number this is
@@ -119,11 +126,16 @@ class Reader {
 
   // Extend record types with the following special values
   enum {
+    // 遇到文件结尾
     kEof = kMaxRecordType + 1,
     // Returned whenever we find an invalid physical record.
     // Currently there are three situations in which this happens:
     // * The record has an invalid CRC (ReadPhysicalRecord reports a drop)
     // * The record is a 0-length record (No drop is reported)
+   
+    // 非法的record，当前有3中情况会返回bad record：
+    // * CRC校验失败 (ReadPhysicalRecord reports adrop)
+    // * 长度为0 (No drop is reported)
     kBadRecord = kMaxRecordType + 2,
     // Returned when we fail to read a valid header.
     kBadHeader = kMaxRecordType + 3,

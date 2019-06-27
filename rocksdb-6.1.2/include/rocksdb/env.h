@@ -511,6 +511,8 @@ ThreadStatusUpdater* CreateThreadStatusUpdater();
 
 //虚基类WritableFile、SequentialFile、RandomAccessFile，分别是文件的写抽象类，顺序读抽象类和随机读抽象类
 //PosixEnv类中包含这几个类的new接口   PosixSequentialFile继承该类
+
+//SequentialFileReader.file_
 class SequentialFile {
  public:
   SequentialFile() {}
@@ -565,6 +567,8 @@ class SequentialFile {
 // A file abstraction for randomly reading the contents of a file.
 //虚基类WritableFile、SequentialFile、RandomAccessFile，分别是文件的写抽象类，顺序读抽象类和随机读抽象类
 //PosixEnv类中包含这几个类的new接口  PosixRandomAccessFile继承该类
+
+//RandomAccessFileReader.file_
 class RandomAccessFile {
  public:
   RandomAccessFile() {}
