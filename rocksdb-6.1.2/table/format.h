@@ -40,6 +40,7 @@ const int kMagicNumberLengthByte = 8;
 
 // BlockHandle is a pointer to the extent of a file that stores a data
 // block or a meta block.
+//BlockHandle是一个class，成员uint64_t offset_是Block在文件中的偏移，成员uint64_t  size_是block的大小；
 class BlockHandle {
  public:
   BlockHandle();
@@ -70,7 +71,9 @@ class BlockHandle {
   enum { kMaxEncodedLength = 10 + 10 };
 
  private:
+  //Block在文件中的偏移
   uint64_t offset_;
+  //size_是block的大小；
   uint64_t size_;
 
   static const BlockHandle kNullBlockHandle;

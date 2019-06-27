@@ -16,6 +16,26 @@
 #include "table/data_block_hash_index.h"
 
 namespace rocksdb {
+/* 一条记录的KV格式如下
+//例如last key="abcxxxxx"  key为"abcssss"，则"abc可以共用"， 
+//shared=3，key后面的"ssss"四个字符串就不能共用，non_shared=4
+
+
+// An entry for a particular key-value pair has the form:
+//     shared_bytes: varint32
+//     unshared_bytes: varint32
+//     value_length: varint32
+//     key_delta: char[unshared_bytes]
+//     value: char[value_length]
+// shared_bytes == 0 for restart points.
+//
+// The trailer of the block has the form:
+//     restarts: uint32[num_restarts]
+//     num_restarts: uint32
+// restarts[i] contains the offset within the block of the ith restart point.
+
+*/
+
 //block data的管理是读写分离的，读取后的遍历查询操作由Block类实现，block data的构建则由BlockBuilder类实现
 //图表记录详见https://blog.csdn.net/caoshangpa/article/details/78977743
 class BlockBuilder {
@@ -77,16 +97,19 @@ class BlockBuilder {
   条数记录会强制加入一个重启点，这个位置的Entry会完整的记录自己的Key。
   */
 
-  // 用于存放block data
+  // 用于存放block data 
+  // block的内容
   std::string buffer_;              // Destination buffer
-  // 用于存放重启点的位置信息
+  // 用于存放重启点的位置信息  restarts_[i]存储的是block的第i个重启点的偏移。
+  //很明显第一个k/v对，总是第一个重启点，也就是restarts[0] = 0;
   std::vector<uint32_t> restarts_;  // Restart points
   size_t estimate_;
   // 从上个重启点遍历到下个重启点时的计数
   int counter_;    // Number of entries emitted since restart
   // 是否调用了Finish
   bool finished_;  // Has Finish() been called?
-  // 记录最后Add的key
+  // 记录最后Add的key 
+  // 记录最后添加的key  
   std::string last_key_;
   DataBlockHashIndexBuilder data_block_hash_index_builder_;
 };
