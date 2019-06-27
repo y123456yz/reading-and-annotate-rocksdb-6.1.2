@@ -175,6 +175,7 @@ class InternalKeyComparator
 #endif
     : public Comparator {
  private:
+  //用于user key的比较
   UserComparatorWrapper user_comparator_;
   std::string name_;
 
@@ -285,6 +286,9 @@ inline int InternalKeyComparator::Compare(const InternalKey& a,
   return Compare(a.Encode(), b.Encode());
 }
 
+//  Inline bool ParseInternalKey()将internal_key（Slice）解析出来为result
+//  AppendInternalKey() 将key（ParsedInternalKey）序列化为result（Internel key）
+
 //Internal key的解码 将编码后的internal_key解码为* result。
 inline bool ParseInternalKey(const Slice& internal_key,
                              ParsedInternalKey* result) {
@@ -333,31 +337,42 @@ class LookupKey {
   ~LookupKey();
 
   // Return a key suitable for lookup in a MemTable.
+  //也就是下面的#1 #2 #3三部分和
   Slice memtable_key() const {
     return Slice(start_, static_cast<size_t>(end_ - start_));
   }
 
   // Return an internal key (suitable for passing to an internal iterator)
+  //也就是下面的#2 #3
   Slice internal_key() const {
     return Slice(kstart_, static_cast<size_t>(end_ - kstart_));
   }
 
   // Return the user key
+  //也就是下面的#2 
   Slice user_key() const {
     return Slice(kstart_, static_cast<size_t>(end_ - kstart_ - 8));
   }
 
  private:
   // We construct a char array of the form:
-  //    klength  varint32               <-- start_
-  //    userkey  char[klength]          <-- kstart_
+  //    klength  varint32               <-- start_    #1
+  //    userkey  char[klength]          <-- kstart_   #2
   //    tag      uint64
-  //                                    <-- end_
+  //                                    <-- end_      #3
   // The array is a suitable MemTable key.
   // The suffix starting with "userkey" can be used as an InternalKey.
+
+  //参考LookupKey::LookupKey
+
+  //start_上面的klength起始地址
   const char* start_;
+  //kstart_记录了user key string的起始地址
   const char* kstart_;
+  //end_指向tag尾部
   const char* end_;
+
+  //最开会利用这个空间，如果空间不够，重新new
   char space_[200];  // Avoid allocation for short keys
 
   // No copying allowed

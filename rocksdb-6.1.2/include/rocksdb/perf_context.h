@@ -180,6 +180,7 @@ struct PerfContext {
   // Time spent on finding or creating a table reader
   uint64_t find_table_nanos;
   // total number of mem table bloom hits
+  //bloomÖĞÃüÖĞ ²Î¿¼MemTable::Get
   uint64_t bloom_memtable_hit_count;
   // total number of mem table bloom misses
   uint64_t bloom_memtable_miss_count;

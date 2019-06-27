@@ -38,7 +38,10 @@ Testutil.cc (util):class Uint64ComparatorImpl : public Comparator {
 Testutil.h (util):class SimpleSuffixReverseComparator : public Comparator {
 Transaction_test.cc (utilities\transactions):class ThreeBytewiseComparator : public Comparator {
 User_comparator_wrapper.h (util):class UserComparatorWrapper final : public Comparator {
+InternalKeyComparator
+BytewiseComparatorImpl
 */
+//实现类如上
 class Comparator {
  public:
   virtual ~Comparator() {}

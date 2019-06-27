@@ -137,6 +137,7 @@ int InternalKeyComparator::Compare(const ParsedInternalKey& a,
   //    decreasing sequence number
   //    decreasing type (though sequence# should be enough to disambiguate)
   int r = user_comparator_.Compare(a.user_key, b.user_key);
+  //比较sequence和type
   if (r == 0) {
     if (a.sequence > b.sequence) {
       r = -1;
@@ -165,14 +166,17 @@ void InternalKeyComparator::FindShortestSeparator(std::string* start,
   std::string tmp(user_start.data(), user_start.size());
   user_comparator_.FindShortestSeparator(&tmp, user_limit);
   if (tmp.size() <= user_start.size() &&
-      user_comparator_.Compare(user_start, tmp) < 0) {
-    // User key has become shorter physically, but larger logically.
-    // Tack on the earliest possible number to the shortened user key.
-    PutFixed64(&tmp,
-               PackSequenceAndType(kMaxSequenceNumber, kValueTypeForSeek));
-    assert(this->Compare(*start, tmp) < 0);
-    assert(this->Compare(tmp, limit) < 0);
-    start->swap(tmp);
+    user_comparator_.Compare(user_start, tmp) < 0) {
+		// if user key在物理上长度变短了，但其逻辑值变大了.生产新的*start时，	
+		// 使用最大的sequence number，以保证排在相同user key记录序列的第一个	
+		
+	    // User key has become shorter physically, but larger logically.
+	    // Tack on the earliest possible number to the shortened user key.
+	    PutFixed64(&tmp,
+	               PackSequenceAndType(kMaxSequenceNumber, kValueTypeForSeek));
+	    assert(this->Compare(*start, tmp) < 0);
+	    assert(this->Compare(tmp, limit) < 0);
+	    start->swap(tmp);
   }
 }
 
@@ -200,12 +204,18 @@ LookupKey::LookupKey(const Slice& _user_key, SequenceNumber s) {
   } else {
     dst = new char[needed];
   }
+
+  //start_指向size部分
   start_ = dst;
   // NOTE: We don't support users keys of more than 2GB :)
   dst = EncodeVarint32(dst, static_cast<uint32_t>(usize + 8));
+
+  //kstart_指向_user_key数据部分
   kstart_ = dst;
   memcpy(dst, _user_key.data(), usize);
   dst += usize;
+
+  //紧跟后面的是SequenceNumber
   EncodeFixed64(dst, PackSequenceAndType(s, kValueTypeForSeek));
   dst += 8;
   end_ = dst;

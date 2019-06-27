@@ -484,15 +484,24 @@ bool MemTable::Add(SequenceNumber s, ValueType type,
       type == kTypeRangeDeletion ? range_del_table_ : table_;
   KeyHandle handle = table->Allocate(encoded_len, &buf);
 
+  //buf内容格式:keylen | key | type | valuelen | value
+  
+  //keylen | key
   char* p = EncodeVarint32(buf, internal_key_size);
   memcpy(p, key.data(), key_size);
   Slice key_slice(p, key_size);
   p += key_size;
+
+  //type
   uint64_t packed = PackSequenceAndType(s, type);
   EncodeFixed64(p, packed);
   p += 8;
+
+  //valuelen | value
   p = EncodeVarint32(p, val_size);
   memcpy(p, value.data(), val_size);
+
+  
   assert((unsigned)(p + val_size - buf) == (unsigned)encoded_len);
   if (!allow_concurrent) {
     // Extract prefix for insert with hint.
@@ -772,6 +781,9 @@ bool MemTable::Get(const LookupKey& key, std::string* value, Status* s,
   bool found_final_value = false;
   bool merge_in_progress = s->IsMergeInProgress();
   bool may_contain = true;
+
+  //写入Data Block的数据会同时更新对应Meta Block中的过滤器。读取数据时也会首先经过布隆过滤器（Bloom Filter）过滤,用于快速判断key是否存在
+  //先在bloom中查找该key是否可能存在，bloom参考https://blog.csdn.net/caoshangpa/article/details/79049678
   if (bloom_filter_) {
     // when both memtable_whole_key_filtering and prefix_extractor_ are set,
     // only do whole key filtering for Get() to save CPU
@@ -783,12 +795,12 @@ bool MemTable::Get(const LookupKey& key, std::string* value, Status* s,
           bloom_filter_->MayContain(prefix_extractor_->Transform(user_key));
     }
   }
-  if (bloom_filter_ && !may_contain) {
+  if (bloom_filter_ && !may_contain) { //bloom中没找到，说明该key不存在
     // iter is null if prefix bloom says the key does not exist
     PERF_COUNTER_ADD(bloom_memtable_miss_count, 1);
     *seq = kMaxSequenceNumber;
   } else {
-    if (bloom_filter_) {
+    if (bloom_filter_) { //bloom中命中
       PERF_COUNTER_ADD(bloom_memtable_hit_count, 1);
     }
     Saver saver;

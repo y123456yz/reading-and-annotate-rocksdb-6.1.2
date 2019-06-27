@@ -35,7 +35,8 @@ class BytewiseComparatorImpl : public Comparator {
   void FindShortestSeparator(std::string* start,
                              const Slice& limit) const override {
     // Find length of common prefix
-     // 找到共同前缀的长度
+     // 找到共同前缀的长度 
+     // 首先计算共同前缀字符串的长度  
     size_t min_length = std::min(start->size(), limit.size());
     size_t diff_index = 0;
     while ((diff_index < min_length) &&
@@ -43,9 +44,12 @@ class BytewiseComparatorImpl : public Comparator {
       diff_index++;
     }
 
-    if (diff_index >= min_length) {
+    if (diff_index >= min_length) {  // 说明*start是limit的前缀，或者反之，此时不作修改，直接返回  
       // Do not shorten if one string is a prefix of the other
     } else {
+    
+	 // 尝试执行字符start[diff_index]++，设置start长度为diff_index+1，并返回  
+	 // ++条件：字符< oxff 并且字符+1 < limit上该index的字符  
       uint8_t start_byte = static_cast<uint8_t>((*start)[diff_index]);
       uint8_t limit_byte = static_cast<uint8_t>(limit[diff_index]);
       if (start_byte >= limit_byte) { // 如果一个字符串是另个一字符串的前缀，无需做截短操作，否则进入else。
