@@ -103,6 +103,7 @@ class BlockBuilder {
   // 用于存放重启点的位置信息  restarts_[i]存储的是block的第i个重启点的偏移。
   //很明显第一个k/v对，总是第一个重启点，也就是restarts[0] = 0;
   std::vector<uint32_t> restarts_;  // Restart points
+  // buffer大小 +重启点数组长度 + 重启点长度(uint32)  
   size_t estimate_;
   // 从上个重启点遍历到下个重启点时的计数
   int counter_;    // Number of entries emitted since restart

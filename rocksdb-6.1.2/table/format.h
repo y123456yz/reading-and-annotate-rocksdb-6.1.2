@@ -234,6 +234,8 @@ inline CompressionType get_block_compression_type(const char* block_data,
   return static_cast<CompressionType>(block_data[block_size]);
 }
 
+//Block.contents_成员
+//赋值见Block::Block
 struct BlockContents {
   Slice data;  // Actual contents of data
   CacheAllocationPtr allocation;

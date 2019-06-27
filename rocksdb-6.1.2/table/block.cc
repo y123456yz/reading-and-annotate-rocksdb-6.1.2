@@ -39,6 +39,8 @@ struct DecodeEntry {
   // 分别放到"*shared"、"*non_shared"和"*value_length"
   // 从源码看出，p应该是一条记录的起始位置
   // 如果解析错误，返回NULL。否则，返回指向一条记录的key_delta字段的指针
+
+  //函数DecodeEntry从字符串[p, limit)解析出key的前缀长度、key前缀之后的字符串长度和value的长度这三个vint32值
   inline const char* operator()(const char* p, const char* limit,
                                 uint32_t* shared, uint32_t* non_shared,
                                 uint32_t* value_length) {
@@ -182,6 +184,8 @@ void IndexBlockIter::Prev() {
 }
 
 // Similar to IndexBlockIter::Prev but also caches the prev entries
+//首先回到current_之前的重启点，
+//然后再向后直到current_
 void DataBlockIter::Prev() {
   assert(Valid());
 
@@ -396,6 +400,7 @@ bool DataBlockIter::SeekForGetImpl(const Slice& target) {
   return true;
 }
 
+//跳到指定的target(Slice)
 void IndexBlockIter::Seek(const Slice& target) {
   Slice seek_key = target;
   if (!key_includes_seq_) {
@@ -407,6 +412,8 @@ void IndexBlockIter::Seek(const Slice& target) {
   }
   uint32_t index = 0;
   bool ok = false;
+
+  // 二分查找，找到key < target的最后一个重启点
   if (prefix_index_) {
     ok = PrefixSeek(target, &index);
   } else if (value_delta_encoded_) {
@@ -420,9 +427,12 @@ void IndexBlockIter::Seek(const Slice& target) {
   if (!ok) {
     return;
   }
+  //找到后，跳转到重启点，其索引由left指定，这是前面二分查找到的结果。
+  //如前面所分析的，value_指向重启点的地址，而size_指定为0，这样ParseNextKey函数将会取出重启点的k/v值。
   SeekToRestartPoint(index);
   // Linear search (within restart block) for first key >= target
 
+  //重启点线性向下，直到遇到key>= target的k/v对。
   while (true) {
     if (!ParseNextIndexKey() || Compare(key_, seek_key) >= 0) {
       return;
@@ -521,7 +531,7 @@ bool DataBlockIter::ParseNextDataKey(const char* limit) {
     limit = data_ + restarts_;  // Restarts come right after data
   }
 
-  if (p >= limit) {
+  if (p >= limit) { //如果已经是最后一个entry了，返回false，标记current_为invalid。
     // No more entries to return.  Mark as invalid.
     current_ = restarts_; // 如果出错，恢复到默认值，并返回false
     restart_index_ = num_restarts_;
@@ -531,11 +541,13 @@ bool DataBlockIter::ParseNextDataKey(const char* limit) {
   // 解析出记录中的key和value
   // Decode next entry
   uint32_t shared, non_shared, value_length;
+  //见DecodeEntry结构
   p = DecodeEntryFunc()(p, limit, &shared, &non_shared, &value_length);
+  //解析出entry，解析出错则设置错误状态，记录错误并返回false。解析成功则根据信息组成key_和value_，并更新重启点index。
   if (p == nullptr || key_.Size() < shared) {
     CorruptionError();
     return false;
-  } else {
+  } else { //成功
     if (shared == 0) {
       // If this key dont share any bytes with prev key then we dont need
       // to decode it and can use it's address in the block directly.
@@ -805,6 +817,7 @@ bool IndexBlockIter::PrefixSeek(const Slice& target, uint32_t* index) {
   }
 }
 
+//从block最后的uint32解析出重启点的个数
 uint32_t Block::NumRestarts() const {
   // size_为何要大于等于2*sizeof(uint32_t)，因为如果只调用BlockBuilder中  
   // 的Finish函数，那么block data至少包含一个uint32_t类型的重启点位置信息和  

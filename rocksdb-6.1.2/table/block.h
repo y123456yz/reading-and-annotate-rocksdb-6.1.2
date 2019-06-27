@@ -205,9 +205,13 @@ class Block {
   SequenceNumber global_seqno() const { return global_seqno_; }
 
  private:
-  BlockContents contents_;
+  BlockContents contents_; 
+  // block数据指针,真正的空间在上面的contents_
+  //赋值见Block::Block
   const char* data_;         // contents_.data.data()
+  // block数据大小  
   size_t size_;              // contents_.data.size()
+  // 重启点数组在data_中的偏移
   uint32_t restart_offset_;  // Offset in data_ of restart array
   uint32_t num_restarts_;
   std::unique_ptr<BlockReadAmpBitmap> read_amp_bitmap_;
@@ -222,6 +226,8 @@ class Block {
   void operator=(const Block&) = delete;
 };
 
+//DataBlockIter IndexBlockIter继承该类 
+//用以遍历Block内部数据
 template <class TValue>
 class BlockIter : public InternalIteratorBase<TValue> {
  public:
@@ -295,8 +301,9 @@ class BlockIter : public InternalIteratorBase<TValue> {
  protected:
   // Note: The type could be changed to InternalKeyComparator but we see a weird
   // performance drop by that.
+  // key比较器  
   const Comparator* comparator_;
-  // block data
+  // block data // block内容  
   const char* data_;       // underlying block contents
 
   //重启点的位置和个数。元素restarts[i]存储的是block data第i个重启点距离block data首地址的偏移。
@@ -307,11 +314,13 @@ class BlockIter : public InternalIteratorBase<TValue> {
   // Index of restart block in which current_ or current_-1 falls
   uint32_t restart_index_;  // 重启点的索引
   // 重启点信息在block data中的偏移  
+  // current_所在的重启点的index  
   uint32_t restarts_;  // Offset of restart array (list of fixed32)
 
   
   // current_ is offset in data_ of current entry.  >= restarts_ if !Valid
   // current_是当前记录在bock data中的偏移，如果current_>=restarts_，说明出错啦。
+  // 当前entry在data中的偏移.  >= restarts_表明非法  
   uint32_t current_;
   IterKey key_;
   Slice value_;
@@ -342,13 +351,19 @@ class BlockIter : public InternalIteratorBase<TValue> {
   // 该函数只是设置了几个有限的状态，其它值将在函数ParseNextKey()中设置。  
   // 需要注意的是，这里的value_并不是记录中的value字段，而只是一个指向记录起始位置的0长度指针，  
   // 这样后面的ParseNextKey函数将会解析出重启点的value字段，并赋值到value_中。
+
+  //根据restart index定位到重启点的k/v对 
   void SeekToRestartPoint(uint32_t index) {
     key_.Clear();
     restart_index_ = index;
     // current_ will be fixed by ParseNextKey();
 
     // ParseNextKey() starts at the end of value_, so set value_ accordingly
+    
+     // ParseNextKey()会设置current_;  
+    //ParseNextKey()从value_结尾开始, 因此需要相应的设置value_  
     uint32_t offset = GetRestartPoint(index);
+    // value长度设置为0，字符串指针是data_+offset  
     value_ = Slice(data_ + offset, 0);
   }
 

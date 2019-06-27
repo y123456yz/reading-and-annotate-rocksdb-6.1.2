@@ -199,6 +199,7 @@ void BlockBuilder::Add(const Slice& key, const Slice& value,
   const size_t non_shared = key.size() - shared; 
   const size_t curr_size = buffer_.size();
 
+  //<shared><non_shared><value_size>填充
   if (use_value_delta_encoding_) {
     // Add "<shared><non_shared>" to buffer_
     PutVarint32Varint32(&buffer_, static_cast<uint32_t>(shared),
@@ -210,12 +211,13 @@ void BlockBuilder::Add(const Slice& key, const Slice& value,
                                 static_cast<uint32_t>(value.size()));
   }
 
-  // 开始组建一条记录
+  // 填充key
   // Add string delta to buffer_ followed by value
   buffer_.append(key.data() + shared, non_shared);
   // Use value delta encoding only when the key has shared bytes. This would
   // simplify the decoding, where it can figure which decoding to use simply by
   // looking at the shared bytes size.
+  //填充value
   if (shared != 0 && use_value_delta_encoding_) {
     buffer_.append(delta_value->data(), delta_value->size());
   } else {

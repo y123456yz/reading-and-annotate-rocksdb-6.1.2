@@ -16,7 +16,7 @@ namespace rocksdb {
 
 class PinnedIteratorsManager;
 
-//TwoLevelIndexIterator继承该类
+//TwoLevelIndexIterator  BlockIter继承该类
 template <class TValue>
 class InternalIteratorBase : public Cleanable {
  public:
