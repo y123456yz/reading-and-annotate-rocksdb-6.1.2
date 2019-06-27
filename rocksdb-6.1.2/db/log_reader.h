@@ -29,6 +29,7 @@ namespace log {
  *
  * Please see Writer for details on the file and record layout.
  */
+//Log_reader.cc Reader 读日志相关  Log_writer.cc Writer 写日志相关
 class Reader {
  public:
   // Interface for reporting errors.

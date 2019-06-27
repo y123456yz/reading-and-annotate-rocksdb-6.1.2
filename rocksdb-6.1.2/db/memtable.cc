@@ -641,6 +641,7 @@ static bool SaveValue(void* arg, const char* entry) {
   // all entries with overly large sequence numbers.
   uint32_t key_length;
   const char* key_ptr = GetVarint32Ptr(entry, entry + 5, &key_length);
+  //先找到对应的key
   if (s->mem->GetInternalKeyComparator().user_comparator()->Equal(
           Slice(key_ptr, key_length - 8), s->key->user_key())) {
     // Correct user key
@@ -675,7 +676,7 @@ static bool SaveValue(void* arg, const char* entry) {
           return false;
         }
         FALLTHROUGH_INTENDED;
-      case kTypeValue: {
+      case kTypeValue: { //获取value
         if (s->inplace_update_support) {
           s->mem->GetLock(s->key->user_key())->ReadLock();
         }
@@ -803,6 +804,8 @@ bool MemTable::Get(const LookupKey& key, std::string* value, Status* s,
     if (bloom_filter_) { //bloom中命中
       PERF_COUNTER_ADD(bloom_memtable_hit_count, 1);
     }
+
+	//从table 跳跃表中获取对应的value  seq
     Saver saver;
     saver.status = s;
     saver.found_final_value = &found_final_value;

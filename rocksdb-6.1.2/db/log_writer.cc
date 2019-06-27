@@ -35,6 +35,15 @@ Writer::~Writer() { WriteBuffer(); }
 
 Status Writer::WriteBuffer() { return dest_->Flush(); }
 
+/*
+
+* +---------+-----------+-----------+----------------+--- ... ---+
+* |CRC (4B) | Size (2B) | Type (1B) | Log number (4B)| Payload	 |
+* +---------+-----------+-----------+----------------+--- ... ---+
+
+*/
+
+//按照record格式记录到日志文件
 Status Writer::AddRecord(const Slice& slice) {
   const char* ptr = slice.data();
   size_t left = slice.size();
@@ -66,6 +75,14 @@ Status Writer::AddRecord(const Slice& slice) {
       block_offset_ = 0;
     }
 
+	/*
+
+	* +---------+-----------+-----------+----------------+--- ... ---+
+	* |CRC (4B) | Size (2B) | Type (1B) | Log number (4B)| Payload	 |
+	* +---------+-----------+-----------+----------------+--- ... ---+
+
+	*/
+
     // Invariant: we never leave < header_size bytes in a block.
     assert(static_cast<int64_t>(kBlockSize - block_offset_) >= header_size);
 
@@ -94,6 +111,13 @@ Status Writer::AddRecord(const Slice& slice) {
 
 bool Writer::TEST_BufferIsEmpty() { return dest_->TEST_BufferIsEmpty(); }
 
+/*
+
+* +---------+-----------+-----------+----------------+--- ... ---+
+* |CRC (4B) | Size (2B) | Type (1B) | Log number (4B)| Payload	 |
+* +---------+-----------+-----------+----------------+--- ... ---+
+
+*/
 Status Writer::EmitPhysicalRecord(RecordType t, const char* ptr, size_t n) {
   assert(n <= 0xffff);  // Must fit in two bytes
 
