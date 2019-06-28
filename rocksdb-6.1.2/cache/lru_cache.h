@@ -334,7 +334,18 @@ class ALIGN_AS(CACHE_LINE_SIZE) LRUCacheShard final : public CacheShard {
 //rocksdb中使用了一种基于LRUCache的缓存机制，用于缓存：
 // 已打开的sstable文件对象和相关元数据；
 // sstable中的dataBlock的内容；使得在发生读取热数据时，尽量在cache中命中，避免IO读取。
-// 新写入到cache还没进入sstable中的数据
+
+//rocksdb利用上述的cache结构来缓存数据。其中：
+
+// cache：来缓存已经被打开的sstable文件句柄以及元数据（默认上限为500个）；
+// bcache：来缓存被读过的sstable中dataBlock的数据（默认上限为8MB）;
+// 
+//当一个sstable文件需要被打开时，首先从cache中寻找是否已经存在相关的文件句柄，若存在则无需重复打开；若不存在，则从打开相关文件，并将（1）indexBlock数据，（2）metaIndexBlock数据等相关元数据进行预读。
+
+
+//在rocksdb中所有KV数据都是存储在Memtable，Immutable Memtable和SSTable中
+//LRUCache针对sstable文件的查找，memtable针对Memtable和Immutable Memtable
+
 
 //LRUCache继承ShardedCache，ShardedCache继承Cache
 //图解参考https://blog.csdn.net/caoshangpa/article/details/78960999
