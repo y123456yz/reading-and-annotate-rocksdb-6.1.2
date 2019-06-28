@@ -85,6 +85,16 @@ static const SequenceNumber kMaxSequenceNumber = ((0x1ull << 56) - 1);
 
 static const SequenceNumber kDisableGlobalSequenceNumber = port::kMaxUint64;
 
+//键值比较
+// 内存数据库中所有的数据项都是按照键值比较规则进行排序的。这个比较规则可以由用户自己定制，也可以
+// 使用系统默认的。在这里介绍一下系统默认的比较规则。
+
+//默认的比较规则：
+// 首先按照字典序比较用户定义的key（ukey），若用户定义key值大，整个internalKey就大；
+// 若用户定义的key相同，则序列号大的internalKey值就小；
+// 通过这样的比较规则，则所有的数据项首先按照用户key进行升序排列；当用户key一致时，按照序列号进行降序排列，
+// 这样可以保证首先读到序列号大的数据项。
+
 //InternalKey和ParsedInternalKey区别?
 //1. InternalKey（class InternalKey）是一个复合概念，是有几个部分组合成的一个key，
 //  ParsedInternalKey（struct ParsedInternalKey）就是对InternalKey分拆后的结果
@@ -97,8 +107,15 @@ static const SequenceNumber kDisableGlobalSequenceNumber = port::kMaxUint64;
 //
 //解码获取成员值见ParseInternalKey
 struct ParsedInternalKey {
+  //用户定义的key：这个key值也就是原生的key值；
   Slice user_key;
+  //快照seq可以参考https://leveldb-handbook.readthedocs.io/zh/latest/rwopt.html#id8
+  //internalKey的seq字段使用的便是快照对应的seq
+  //序列号：leveldb中，每一次写操作都有一个sequence number，标志着写入操作的先后顺序。
+  //由于在leveldb中，可能会有多条相同key的数据项同时存储在数据库中，因此需要有一个序列
+  //号来标识这些数据项的新旧情况。序列号最大的数据项为最新值；
   SequenceNumber sequence;
+  //类型：标志本条数据项的类型，为更新还是删除；
   ValueType type;
 
   ParsedInternalKey()
@@ -208,6 +225,17 @@ class InternalKeyComparator
 // Modules in this directory should keep internal keys wrapped inside
 // the following class instead of plain strings so that we do not
 // incorrectly use string comparisons instead of an InternalKeyComparator.
+
+//键值比较
+// 内存数据库中所有的数据项都是按照键值比较规则进行排序的。这个比较规则可以由用户自己定制，也可以
+// 使用系统默认的。在这里介绍一下系统默认的比较规则。
+
+//默认的比较规则：
+// 首先按照字典序比较用户定义的key（ukey），若用户定义key值大，整个internalKey就大；
+// 若用户定义的key相同，则序列号大的internalKey值就小；
+// 通过这样的比较规则，则所有的数据项首先按照用户key进行升序排列；当用户key一致时，按照序列号进行降序排列，
+// 这样可以保证首先读到序列号大的数据项。
+
 
 //InternalKey和ParsedInternalKey区别?
 //1. InternalKey（class InternalKey）是一个复合概念，是有几个部分组合成的一个key，

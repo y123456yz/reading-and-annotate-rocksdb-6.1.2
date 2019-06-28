@@ -12,6 +12,7 @@
 
 #pragma once
 namespace rocksdb {
+//可以参考https://leveldb-handbook.readthedocs.io/zh/latest/journal.html
 namespace log {
 
 //rocksdb把日志文件切分成了大小为32KB的连续block块，block由连续的log record组成，log record的格式为：
@@ -49,7 +50,7 @@ static const int kMaxRecordType = kRecyclableLastType;
 //rocksdb把日志文件切分成了大小为32KB的连续block块，block由连续的log record组成，log record的格式为：
 //  4      2       1        
 //CRC32 | LEN | LOG TYPE | DATA
-static const unsigned int kBlockSize = 32768; //32KB
+static const unsigned int kBlockSize = 32768; //32KB  日志log读写都是以32k为单位
 
 // Header is checksum (4 bytes), length (2 bytes), type (1 byte)
 static const int kHeaderSize = 4 + 2 + 1;
