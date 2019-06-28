@@ -34,6 +34,13 @@ namespace rocksdb {
 //     num_restarts: uint32
 // restarts[i] contains the offset within the block of the ith restart point.
 
+一个entry分为5部分内容：
+
+与前一条记录key共享部分的长度；
+与前一条记录key不共享部分的长度；
+value长度；
+与前一条记录key非共享的内容；
+value内容；
 */
 
 //block data的管理是读写分离的，读取后的遍历查询操作由Block类实现，block data的构建则由BlockBuilder类实现
@@ -95,6 +102,12 @@ class BlockBuilder {
   /* 一个问题，既然通过Comparator可以极大的节省key的存储空间，那为什么又要使用重启点机制来额外占用一下空间呢？
   这是因为如果最开头的记录数据损坏，其后的所有记录都将无法恢复。为了降低这个风险，引入了重启点，每隔固定
   条数记录会强制加入一个重启点，这个位置的Entry会完整的记录自己的Key。
+
+    由于sstable中所有的keyvalue对都是严格按序存储的，用了节省存储空间，leveldb并不会为每一对keyvalue对都存储完整的key值，
+  而是存储与上一个key非共享的部分，避免了key重复内容的存储。
+
+    每间隔若干个keyvalue对，将为该条记录重新存储一个完整的key。重复该过程（默认间隔值为16），每个重新存储完整key的点称
+  之为Restart point。
   */
 
   // 用于存放block data 

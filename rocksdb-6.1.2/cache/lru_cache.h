@@ -331,6 +331,11 @@ class ALIGN_AS(CACHE_LINE_SIZE) LRUCacheShard final : public CacheShard {
   mutable port::Mutex mutex_;
 };
 
+//rocksdb中使用了一种基于LRUCache的缓存机制，用于缓存：
+// 已打开的sstable文件对象和相关元数据；
+// sstable中的dataBlock的内容；使得在发生读取热数据时，尽量在cache中命中，避免IO读取。
+// 新写入到cache还没进入sstable中的数据
+
 //LRUCache继承ShardedCache，ShardedCache继承Cache
 //图解参考https://blog.csdn.net/caoshangpa/article/details/78960999
 class LRUCache

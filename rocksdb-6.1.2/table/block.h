@@ -306,6 +306,19 @@ class BlockIter : public InternalIteratorBase<TValue> {
   // block data // block内容  
   const char* data_;       // underlying block contents
 
+  /* 一个问题，既然通过Comparator可以极大的节省key的存储空间，那为什么又要使用重启点机制来额外占用一下空间呢？ 原因如下
+  1. 这是因为如果最开头的记录数据损坏，其后的所有记录都将无法恢复。为了降低这个风险，引入了重启点，每隔固定
+    条数记录会强制加入一个重启点，这个位置的Entry会完整的记录自己的Key。
+
+  2. 由于sstable中所有的keyvalue对都是严格按序存储的，用了节省存储空间，leveldb并不会为每一对keyvalue对都存储完整的key值，
+    而是存储与上一个key非共享的部分，避免了key重复内容的存储。每间隔若干个keyvalue对，将为该条记录重新存储一个完整的key。
+    重复该过程（默认间隔值为16），每个重新存储完整key的点称之为Restart point。
+  3. leveldb设计Restart point的目的是在读取sstable内容时，加速查找的过程。
+    由于每个Restart point存储的都是完整的key值，因此在sstable中进行数据查找时，可以首先利用restart point点的数据进行键
+    值比较，以便于快速定位目标数据所在的区域；
+    当确定目标数据所在区域时，再依次对区间内所有数据项逐项比较key值，进行细粒度地查找；
+  */
+
   //重启点的位置和个数。元素restarts[i]存储的是block data第i个重启点距离block data首地址的偏移。
   //很明显第一条记录，总是第一个重启点，也就是restarts[0] = 0。num_restarts是重启点的个数
   // 重启点个数
@@ -317,7 +330,6 @@ class BlockIter : public InternalIteratorBase<TValue> {
   // current_所在的重启点的index  
   uint32_t restarts_;  // Offset of restart array (list of fixed32)
 
-  
   // current_ is offset in data_ of current entry.  >= restarts_ if !Valid
   // current_是当前记录在bock data中的偏移，如果current_>=restarts_，说明出错啦。
   // 当前entry在data中的偏移.  >= restarts_表明非法  

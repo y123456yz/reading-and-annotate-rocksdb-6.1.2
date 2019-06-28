@@ -213,7 +213,9 @@ class Footer {
 
   uint32_t version_;
   ChecksumType checksum_;
+  //SStable中的filter index所在偏移
   BlockHandle metaindex_handle_;
+  //SStable中的data index所在偏移
   BlockHandle index_handle_;
   uint64_t table_magic_number_ = 0;
 };

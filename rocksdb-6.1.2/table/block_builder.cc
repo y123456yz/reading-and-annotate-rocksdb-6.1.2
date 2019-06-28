@@ -158,6 +158,14 @@ Slice BlockBuilder::Finish() {
 //     num_restarts: uint32
 // restarts[i] contains the offset within the block of the ith restart point.
 
+一个entry分为5部分内容：
+
+与前一条记录key共享部分的长度；
+与前一条记录key不共享部分的长度；
+value长度；
+与前一条记录key非共享的内容；
+value内容；
+
 */
 
 //构建block data数据存入buffer_  调用Add函数向当前Block中新加入一个k/v对{key, value}。
