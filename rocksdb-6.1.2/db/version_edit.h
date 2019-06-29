@@ -189,6 +189,12 @@ struct LevelFilesBrief {
   }
 };
 
+/*
+VersionSet 是所有Version的集合，管理着所有存活的Version。
+　VersionEdit 表示Version之间的变化，相当于delta 增量，表示有增加了多少文件，删除了文件。下图表示他们之间的关系。
+Version0 +VersionEdit-->Version1
+　VersionEdit会保存到MANIFEST文件中，当做数据恢复时就会从MANIFEST文件中读出来重建数据。
+*/
 class VersionEdit {
  public:
   VersionEdit() { Clear(); }

@@ -89,7 +89,7 @@ struct MemTablePostProcessInfo {
 // be modified) and a separate list of the MemTables that can no longer be
 // written to (aka the 'immutable memtables').
 /*
-    ÔÚLevelDBÖĞËùÓĞKVÊı¾İ¶¼ÊÇ´æ´¢ÔÚMemtable£¬Immutable MemtableºÍSSTableÖĞµÄ£¬Immutable Memtable´Ó½á¹¹ÉÏ½²ºÍMemtable
+    ÔÚrocksdbÖĞËùÓĞKVÊı¾İ¶¼ÊÇ´æ´¢ÔÚMemtable£¬Immutable MemtableºÍSSTableÖĞµÄ£¬Immutable Memtable´Ó½á¹¹ÉÏ½²ºÍMemtable
 ÊÇÍêÈ«Ò»ÑùµÄ£¬Çø±ğ½ö½öÔÚÓÚÆäÊÇÖ»¶ÁµÄ£¬²»ÔÊĞíĞ´Èë²Ù×÷£¬¶øMemtableÔòÊÇÔÊĞíĞ´ÈëºÍ¶ÁÈ¡µÄ¡£µ±MemtableĞ´ÈëµÄÊı¾İÕ¼ÓÃÄÚ´æµ½
 ´ïÖ¸¶¨ÊıÁ¿£¬Ôò×Ô¶¯×ª»»ÎªImmutable Memtable£¬µÈ´ıDumpµ½´ÅÅÌÖĞ£¬ÏµÍ³»á×Ô¶¯Éú³ÉĞÂµÄMemtable¹©Ğ´²Ù×÷Ğ´ÈëĞÂÊı¾İ£¬Àí½âÁËMemtable£¬
 ÄÇÃ´Immutable Memtable×ÔÈ»²»ÔÚ»°ÏÂ¡£
@@ -99,6 +99,18 @@ KeyµÄValueÔÚMemtableÄÚÊÇ×÷Îª²åÈëÒ»Ìõ¼ÇÂ¼ÊµÊ©µÄ£¬µ«ÊÇ»á´òÉÏÒ»¸öKeyµÄÉ¾³ı±ê¼Ç£¬ÕæÕ
 ÊÊµÄÎ»ÖÃÉÏÒÔ±£³ÖÕâÖÖKeyÓĞĞòĞÔ¡£ÆäÊµ£¬LevelDbµÄMemtableÀàÖ»ÊÇÒ»¸ö½Ó¿ÚÀà£¬ÕæÕıµÄ²Ù×÷ÊÇÍ¨¹ı±³ºóµÄSkipListÀ´×öµÄ£¬°üÀ¨²åÈë²Ù×÷
 ºÍ¶ÁÈ¡²Ù×÷µÈ£¬ËùÒÔMemtableµÄºËĞÄÊı¾İ½á¹¹ÊÇÒ»¸öSkipList¡£
     MemtableÖ÷Òª×÷ÓÃÊÇ¶Ôskiplist¡¢arena¡¢comparator½øĞĞ×éºÏºÍ¹ÜÀí£¬½Ó¿Úº¯ÊıÆÁ±ÎÁËµ×²ã²Ù×÷£¬¶ÔÊ¹ÓÃÕß¸ü¼ÓÓÅÑÅ¡£
+
+  ÄÚ´æÖĞµÄMemTableºÍImmutable MemTableÒÔ¼°´ÅÅÌÉÏµÄ¼¸ÖÖÖ÷ÒªÎÄ¼ş£ºCurrentÎÄ¼ş£¬ManifestÎÄ¼ş£¬logÎÄ¼şÒÔ¼°SSTableÎÄ¼ş¡£
+µ±È»£¬LevelDb³ıÁËÕâÁù¸öÖ÷Òª²¿·Ö»¹ÓĞÒ»Ğ©¸¨ÖúµÄÎÄ¼ş£¬µ«ÊÇÒÔÉÏÁù¸öÎÄ¼şºÍÊı¾İ½á¹¹ÊÇLevelDbµÄÖ÷Ìå¹¹³ÉÔªËØ¡£
+
+Manifest:Ëü¼ÇÔØÁËSSTable¸÷¸öÎÄ¼şµÄ¹ÜÀíĞÅÏ¢£¬±ÈÈçÊôÓÚÄÄ¸öLevel£¬ÎÄ¼şÃû³Æ½ĞÉ¶£¬×îĞ¡keyºÍ×î´ókey¸÷×ÔÊÇ¶àÉÙ
+current: 
+ 1. ÓÉÓÚÃ¿´ÎÆô¶¯£¬¶¼»áĞÂ½¨Ò»¸öManifestÎÄ¼ş£¬Òò´Ëleveldbµ±ÖĞ¿ÉÄÜ»á´æÔÚ¶à¸ömanifestÎÄ¼ş¡£Òò´ËĞèÒªÒ»¸ö¶î
+  ÍâµÄcurrentÎÄ¼şÀ´Ö¸Ê¾µ±Ç°ÏµÍ³Ê¹ÓÃµÄµ½µ×ÊÇÄÄ¸ömanifestÎÄ¼ş¡£
+ 2. Õâ¸öÎÄ¼şµÄÄÚÈİÖ»ÓĞÒ»¸öĞÅÏ¢£¬¾ÍÊÇ¼ÇÔØµ±Ç°µÄmanifestÎÄ¼şÃû¡£ÒòÎªÔÚLevleDbµÄÔËĞĞ¹ı³ÌÖĞ£¬Ëæ×ÅCompactionµÄ½øĞĞ£¬
+  SSTableÎÄ¼ş»á·¢Éú±ä»¯£¬»áÓĞĞÂµÄÎÄ¼ş²úÉú£¬ÀÏµÄÎÄ¼ş±»·ÏÆú£¬ManifestÒ²»á¸ú×Å·´Ó³ÕâÖÖ±ä»¯£¬´ËÊ±ÍùÍù»áĞÂÉú³ÉManifest
+  ÎÄ¼şÀ´¼ÇÔØÕâÖÖ±ä»¯£¬¶øCurrentÔòÓÃÀ´Ö¸³öÄÄ¸öManifestÎÄ¼ş²ÅÊÇÎÒÃÇ¹ØĞÄµÄÄÇ¸öManifestÎÄ¼ş¡£
+
 */
 
 //ÔÚrocksdbÖĞËùÓĞKVÊı¾İ¶¼ÊÇ´æ´¢ÔÚMemtable£¬Immutable MemtableºÍSSTableÖĞ

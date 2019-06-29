@@ -92,6 +92,7 @@ class TableCache {
              int level = -1);
 
   // Evict any entry for the specified file number
+  // 该函数用以清除指定文件所有cache的entry，函数实现很简单，就是根据file number清除cache对象。   
   static void Evict(Cache* cache, uint64_t file_number);
 
   // Clean table handle and erase it from the table cache
@@ -165,7 +166,10 @@ class TableCache {
                         bool for_compaction = false);
 
   const ImmutableCFOptions& ioptions_;
+  //文件相关配置
   const EnvOptions& env_options_;
+
+  //对应LRUCache
   Cache* const cache_;
   std::string row_cache_id_;
   bool immortal_tables_;
