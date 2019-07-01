@@ -43,15 +43,32 @@ class FilterPolicy;
 //      (StartBlock Add*)* Finish
 //
 // BlockBased/Full FilterBlock would be called in the same way.
+
+//如果打开db时指定了FilterPolicy，那么每个创建的table都会保存一个filter block，
+// table中的metaindex就包含一条从"filter.<N>到filter block的BlockHandle的映射，
+// 其中"<N>"是filter policy的Name()函数返回的string。
+//Filter block存储了一连串的filter值，其中第i个filter保存的是block b中所有的key
+// 通过FilterPolicy::CreateFilter()计算得到的结果，block b在sstable文件中的偏移
+// 满足[ i*base ... (i+1)*base-1 ]。
+
+//Filter Block也就是前面sstable中的meta block，位于data block之后。
+//FilterBlockBuilder构造filter block, FilterBlockReader类读取block
+
+//FullFilterBlockBuilder  BlockBasedFilterBlockBuilder继承该类
+
+//它为指定的table构建所有的filter，结果是一个string字符串，并作为一个block存放在table中
 class FilterBlockBuilder {
  public:
   explicit FilterBlockBuilder() {}
   virtual ~FilterBlockBuilder() {}
 
   virtual bool IsBlockBased() = 0;                    // If is blockbased filter
+  // 开始构建新的filter block，TableBuilder在构造函数和Flush中调用  
   virtual void StartBlock(uint64_t block_offset) = 0;  // Start new block filter
+  // 添加key，TableBuilder每次向data block中加入key时调用 
   virtual void Add(const Slice& key) = 0;      // Add a key to current filter
   virtual size_t NumAdded() const = 0;         // Number of keys added
+  // 结束构建，TableBuilder在结束对table的构建时调用  
   Slice Finish() {                             // Generate Filter
     const BlockHandle empty_handle;
     Status dont_care_status;
@@ -71,6 +88,12 @@ class FilterBlockBuilder {
 // KeyMayMatch and PrefixMayMatch would trigger filter checking
 //
 // BlockBased/Full FilterBlock would be called in the same way.
+
+//FilterBlockBuilder构造filter block, FilterBlockReader类读取block
+
+
+//FilterBlock的读取操作在FilterBlockReader类中，它的主要功能是根据传入的FilterPolicy和filter，进行key的匹配查找。
+//BlockBasedFilterBlockReader  FullFilterBlockReader继承该类
 class FilterBlockReader {
  public:
   explicit FilterBlockReader()

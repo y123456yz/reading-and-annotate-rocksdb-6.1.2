@@ -61,9 +61,12 @@ class BlockBasedFilterBlockBuilder : public FilterBlockBuilder {
   size_t prev_prefix_size_;         // the length of the last appended prefix to
                                     // "entries_".
   std::string entries_;             // Flattened entry contents
+   // 各key在keys_中的位置  
   std::vector<size_t> start_;       // Starting index in entries_ of each entry
+  // 当前计算出的filter data  
   std::string result_;              // Filter data computed so far
   std::vector<Slice> tmp_entries_;  // policy_->CreateFilter() argument
+   // 各个filter在result_中的位置  
   std::vector<uint32_t> filter_offsets_;
   size_t num_added_;  // Number of keys added
 
@@ -74,6 +77,7 @@ class BlockBasedFilterBlockBuilder : public FilterBlockBuilder {
 
 // A FilterBlockReader is used to parse filter from SST table.
 // KeyMayMatch and PrefixMayMatch would trigger filter checking
+
 class BlockBasedFilterBlockReader : public FilterBlockReader {
  public:
   // REQUIRES: "contents" and *policy must stay live while *this is live.
@@ -97,10 +101,14 @@ class BlockBasedFilterBlockReader : public FilterBlockReader {
   std::string ToString() const override;
 
  private:
+  // filter策略  
   const FilterPolicy* policy_;
   const SliceTransform* prefix_extractor_;
+   // filter data指针 (at block-start)  
   const char* data_;    // Pointer to filter data (at block-start)
+  // offset array的开始地址 (at block-end)  
   const char* offset_;  // Pointer to beginning of offset array (at block-end)
+   // offsetarray元素个数  
   size_t num_;          // Number of entries in offset array
   size_t base_lg_;      // Encoding parameter (see kFilterBaseLg in .cc file)
   BlockContents contents_;

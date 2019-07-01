@@ -86,6 +86,9 @@ class FilterBitsReader {
 // RocksDB would first try using functions in Set 2. if they return nullptr,
 // it would use Set 1 instead.
 // You can choose filter type in NewBloomFilterPolicy
+
+//BloomFilterPolicy继承该类
+//FilterPolicy是用于key过滤的，可以快速的排除不存在的key
 class FilterPolicy {
  public:
   virtual ~FilterPolicy();
@@ -94,6 +97,7 @@ class FilterPolicy {
   // changes in an incompatible way, the name returned by this method
   // must be changed.  Otherwise, old incompatible filters may be
   // passed to methods of this type.
+  //FilterPolicy是用于key过滤的，可以快速的排除不存在的key
   virtual const char* Name() const = 0;
 
   // keys[0,n-1] contains a list of keys (potentially with duplicates)
@@ -102,6 +106,10 @@ class FilterPolicy {
   //
   // Warning: do not change the initial contents of *dst.  Instead,
   // append the newly constructed filter to *dst.
+  /*
+  CreateFilter接口，它根据指定的参数创建过滤器，并将结果append到dst中，注意：不能修改dst的原始内容，只做append。
+  参数@keys[0,n-1]包含依据用户提供的comparator排序的key列表--可重复，并把根据这些key创建的filter追加到@*dst中。
+  */
   virtual void CreateFilter(const Slice* keys, int n,
                             std::string* dst) const = 0;
 
@@ -110,6 +118,9 @@ class FilterPolicy {
   // the key was in the list of keys passed to CreateFilter().
   // This method may return true or false if the key was not on the
   // list, but it should aim to return false with a high probability.
+  //KeyMayMatch，参数@filter包含了调用CreateFilter函数append的数据，如果key在传递函数CreateFilter的key列表中，
+  //则必须返回true。
+  //注意，它不需要精确，也就是即使key不在前面传递的key列表中，也可以返回true，但是如果key在列表中，就必须返回true。
   virtual bool KeyMayMatch(const Slice& key, const Slice& filter) const = 0;
 
   // Get the FilterBitsBuilder, which is ONLY used for full filter block

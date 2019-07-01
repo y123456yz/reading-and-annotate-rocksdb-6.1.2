@@ -57,6 +57,7 @@ void AppendItem(std::string* props, const TKey& key, const std::string& value) {
 
 // Generate new filter every 2KB of data
 static const size_t kFilterBaseLg = 11;
+//filter block大小 2k
 static const size_t kFilterBase = 1 << kFilterBaseLg;
 
 BlockBasedFilterBlockBuilder::BlockBasedFilterBlockBuilder(
@@ -71,6 +72,7 @@ BlockBasedFilterBlockBuilder::BlockBasedFilterBlockBuilder(
   assert(policy_);
 }
 
+//根据参数block_offset计算出filter index，然后循环调用GenerateFilter生成新的Filter。
 void BlockBasedFilterBlockBuilder::StartBlock(uint64_t block_offset) {
   uint64_t filter_index = (block_offset / kFilterBase);
   assert(filter_index >= filter_offsets_.size());
@@ -90,6 +92,7 @@ void BlockBasedFilterBlockBuilder::Add(const Slice& key) {
 }
 
 // Add key to filter if needed
+//把key添加到key_中，并在start_中记录位置。
 inline void BlockBasedFilterBlockBuilder::AddKey(const Slice& key) {
   num_added_++;
   start_.push_back(entries_.size());
@@ -113,6 +116,8 @@ inline void BlockBasedFilterBlockBuilder::AddPrefix(const Slice& key) {
   }
 }
 
+//调用这个函数说明整个table的data block已经构建完了，可以生产最终的filter block了，
+//在TableBuilder::Finish函数中被调用，向sstable写入meta block。
 Slice BlockBasedFilterBlockBuilder::Finish(const BlockHandle& /*tmp*/,
                                            Status* status) {
   // In this impl we ignore BlockHandle
@@ -122,17 +127,20 @@ Slice BlockBasedFilterBlockBuilder::Finish(const BlockHandle& /*tmp*/,
   }
 
   // Append array of per-filter offsets
+  // 从0开始顺序存储各filter的偏移值，见filter block data的数据格式。  
   const uint32_t array_offset = static_cast<uint32_t>(result_.size());
   for (size_t i = 0; i < filter_offsets_.size(); i++) {
     PutFixed32(&result_, filter_offsets_[i]);
   }
 
+  // 最后是filter个数，和shift常量（11），并返回结果  
   PutFixed32(&result_, array_offset);
   result_.push_back(kFilterBaseLg);  // Save encoding parameter in result
   return Slice(result_);
 }
 
 void BlockBasedFilterBlockBuilder::GenerateFilter() {
+  //如果filter中key个数为0，则直接压入result_.size()并返回  
   const size_t num_entries = start_.size();
   if (num_entries == 0) {
     // Fast path if there are no keys for this filter
@@ -141,6 +149,7 @@ void BlockBasedFilterBlockBuilder::GenerateFilter() {
   }
 
   // Make list of keys from flattened key structure
+  //从key创建临时key list，根据key的序列字符串kyes_和各key在keys_中的开始位置start_依次提取出key。  
   start_.push_back(entries_.size());  // Simplify length computation
   tmp_entries_.resize(num_entries);
   for (size_t i = 0; i < num_entries; i++) {
@@ -150,6 +159,7 @@ void BlockBasedFilterBlockBuilder::GenerateFilter() {
   }
 
   // Generate filter for current set of keys and append to result_.
+  //为当前的key集合生产filter，并append到result_  
   filter_offsets_.push_back(static_cast<uint32_t>(result_.size()));
   policy_->CreateFilter(&tmp_entries_[0], static_cast<int>(num_entries),
                         &result_);
@@ -161,6 +171,7 @@ void BlockBasedFilterBlockBuilder::GenerateFilter() {
   prev_prefix_size_ = 0;
 }
 
+//根据存储格式解析出偏移数组开始指针、个数等信息
 BlockBasedFilterBlockReader::BlockBasedFilterBlockReader(
     const SliceTransform* prefix_extractor,
     const BlockBasedTableOptions& table_opt, bool _whole_key_filtering,
@@ -176,14 +187,18 @@ BlockBasedFilterBlockReader::BlockBasedFilterBlockReader(
   assert(policy_);
   size_t n = contents_.data.size();
   if (n < 5) return;  // 1 byte for base_lg_ and 4 for start of offset array
-  base_lg_ = contents_.data[n - 1];
-  uint32_t last_word = DecodeFixed32(contents_.data.data() + n - 5);
+  base_lg_ = contents_.data[n - 1]; // 最后1byte存的是base 
+  uint32_t last_word = DecodeFixed32(contents_.data.data() + n - 5);  //偏移数组的位置  
   if (last_word > n - 5) return;
   data_ = contents_.data.data();
-  offset_ = data_ + last_word;
-  num_ = (n - 5 - last_word) / 4;
+  offset_ = data_ + last_word; // 偏移数组开始指针
+  num_ = (n - 5 - last_word) // 计算出filter个数  
 }
 
+//查找函数传入两个参数，@block_offset是查找data block在sstable中的偏移，
+//Filter根据此偏移计算filter的编号；@key是查找的key。
+//它首先计算出filterindex，根据index解析出filter的range，如果是合法的range，
+//就从data_中取出filter，调用policy_做key的匹配查询。
 bool BlockBasedFilterBlockReader::KeyMayMatch(
     const Slice& key, const SliceTransform* /* prefix_extractor */,
     uint64_t block_offset, const bool /*no_io*/,
@@ -205,11 +220,15 @@ bool BlockBasedFilterBlockReader::PrefixMayMatch(
 
 bool BlockBasedFilterBlockReader::MayMatch(const Slice& entry,
                                            uint64_t block_offset) {
-  uint64_t index = block_offset >> base_lg_;
+  // 计算出filter index  
+  uint64_t index = block_offset >> base_lg_; 
   if (index < num_) {
+  	// 解析出filter的range  
     uint32_t start = DecodeFixed32(offset_ + index * 4);
     uint32_t limit = DecodeFixed32(offset_ + index * 4 + 4);
+	
     if (start <= limit && limit <= (uint32_t)(offset_ - data_)) {
+	  // 根据range得到filter  
       Slice filter = Slice(data_ + start, limit - start);
       bool const may_match = policy_->KeyMayMatch(entry, filter);
       if (may_match) {
@@ -221,7 +240,7 @@ bool BlockBasedFilterBlockReader::MayMatch(const Slice& entry,
       }
     } else if (start == limit) {
       // Empty filters do not match any entries
-      return false;
+      return false; // 空filter不匹配任何key  
     }
   }
   return true;  // Errors are treated as potential matches

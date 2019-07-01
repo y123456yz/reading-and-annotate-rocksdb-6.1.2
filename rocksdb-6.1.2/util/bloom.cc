@@ -266,6 +266,7 @@ bool FullFilterBitsReader::HashMayMatch(const uint32_t& hash,
 }
 
 // An implementation of filter policy
+//bloomFilter参考https://www.cnblogs.com/z941030/p/9218356.html
 class BloomFilterPolicy : public FilterPolicy {
  public:
   explicit BloomFilterPolicy(int bits_per_key, bool use_block_based_builder)
@@ -278,27 +279,35 @@ class BloomFilterPolicy : public FilterPolicy {
 
   const char* Name() const override { return "rocksdb.BuiltinBloomFilter"; }
 
+  //创建bloom filter
   void CreateFilter(const Slice* keys, int n, std::string* dst) const override {
     // Compute bloom filter size (in both bits and bytes)
     size_t bits = n * bits_per_key_;
 
     // For small n, we can see a very high false positive rate.  Fix it
     // by enforcing a minimum bloom filter length.
-    if (bits < 64) bits = 64;
+    if (bits < 64) bits = 64; // 如果n太小FP会很高，限定filter的最小长度  
 
     size_t bytes = (bits + 7) / 8;
     bits = bytes * 8;
 
+	//首先根据key个数分配filter空间。
     const size_t init_size = dst->size();
     dst->resize(init_size + bytes, 0);
+
+	//在filter最后的字节位压入hash函数个数
     dst->push_back(static_cast<char>(num_probes_));  // Remember # of probes
+    // 对于每个key，使用double-hashing生产一系列的hash值h(num_probes_个)，设置bits array的第h位=1。
     char* array = &(*dst)[init_size];
     for (size_t i = 0; i < (size_t)n; i++) {
       // Use double-hashing to generate a sequence of hash values.
       // See analysis in [Kirsch,Mitzenmacher 2006].
-      uint32_t h = hash_func_(keys[i]);
+      uint32_t h = hash_func_(keys[i]); // h1函数 
+      // h2函数、由h1 Rotate right 17 bits  
       const uint32_t delta = (h >> 17) | (h << 15);  // Rotate right 17 bits
+      // double-hashing生产num_probes_个的hash值 
       for (size_t j = 0; j < num_probes_; j++) {
+	  	// 在bits array上设置第bitpos位  
         const uint32_t bitpos = h % bits;
         array[bitpos/8] |= (1 << (bitpos % 8));
         h += delta;
@@ -306,6 +315,7 @@ class BloomFilterPolicy : public FilterPolicy {
     }
   }
 
+  //在指定的filer中查找key是否存在
   bool KeyMayMatch(const Slice& key, const Slice& bloom_filter) const override {
     const size_t len = bloom_filter.size();
     if (len < 2) return false;
@@ -322,6 +332,8 @@ class BloomFilterPolicy : public FilterPolicy {
       return true;
     }
 
+	// 计算key的hash值，重复计算阶段的步骤，循环计算k个hash值，
+	//只要有一个结果对应的bit位为0，就认为不匹配，否则认为匹配。
     uint32_t h = hash_func_(key);
     const uint32_t delta = (h >> 17) | (h << 15);  // Rotate right 17 bits
     for (size_t j = 0; j < k; j++) {
@@ -348,7 +360,9 @@ class BloomFilterPolicy : public FilterPolicy {
   bool UseBlockBasedBuilder() { return use_block_based_builder_; }
 
  private:
+  //它的值越大，发生冲突的概率就越低，那么bloom hashing误判的概率就越低
   size_t bits_per_key_;
+  //HASH函数个数
   size_t num_probes_;
   uint32_t (*hash_func_)(const Slice& key);
 
