@@ -124,6 +124,8 @@ typedef std::unordered_map<std::string, std::shared_ptr<const TableProperties>>
 // A DB is a persistent ordered map from keys to values.
 // A DB is safe for concurrent access from multiple threads without
 // any external synchronization.
+
+//DBImplºÃ≥–∏√¿‡
 class DB {
  public:
   // Open the database with the specified "name".

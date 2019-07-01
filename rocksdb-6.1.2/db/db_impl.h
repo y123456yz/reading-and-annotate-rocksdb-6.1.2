@@ -743,8 +743,10 @@ class DBImpl : public DB {
                        std::map<std::string, uint64_t>* stats_map);
 
  protected:
+  // 环境，封装了系统相关的文件操作、线程等等  
   Env* const env_;
   const std::string dbname_;
+  // 多版本DB文件
   std::unique_ptr<VersionSet> versions_;
   // Flag to check whether we allocated and own the info log file
   bool own_info_log_;
@@ -1227,7 +1229,7 @@ class DBImpl : public DB {
   void WaitForBackgroundWork();
 
   // table_cache_ provides its own synchronization
-  std::shared_ptr<Cache> table_cache_;
+  std::shared_ptr<Cache> table_cache_; 
 
   // Lock over the persistent DB state.  Non-nullptr iff successfully acquired.
   FileLock* db_lock_;
@@ -1254,6 +1256,7 @@ class DBImpl : public DB {
   // * whenever disable_delete_obsolete_files_ goes to 0.
   // * whenever SetOptions successfully updates options.
   // * whenever a column family is dropped.
+  // 在background work结束时激发  
   InstrumentedCondVar bg_cv_;
   // Writes are protected by locking both mutex_ and log_write_mutex_, and reads
   // must be under either mutex_ or log_write_mutex_. Since after ::Open,
@@ -1406,6 +1409,8 @@ class DBImpl : public DB {
   // deleted from pending_outputs_, which allows PurgeObsoleteFiles() to clean
   // it up.
   // State is protected with db mutex.
+
+  // 待copact的文件列表，保护以防误删  
   std::list<uint64_t> pending_outputs_;
 
   // PurgeFileInfo is a structure to hold information of files to be deleted in

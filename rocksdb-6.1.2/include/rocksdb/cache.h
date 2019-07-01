@@ -132,6 +132,7 @@ Cache分为两种，分别是table cache和block cache。
 
 //LRUCache继承ShardedCache，ShardedCache继承Cache
 //可以参考https://blog.csdn.net/caoshangpa/article/details/78960999
+//DBImpl.table_cache_
 class Cache {
  public:
   // Depending on implementation, cache entries with high priority could be less

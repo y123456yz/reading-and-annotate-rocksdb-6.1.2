@@ -2057,6 +2057,9 @@ bool Version::Unref() {
   return false;
 }
 
+// 如果指定level中的某些文件和[*smallest_user_key,*largest_user_key]有重合就返回true。
+// @smallest_user_key==NULL表示比DB中所有key都小的key.  
+// @largest_user_key==NULL表示比DB中所有key都大的key.  
 bool VersionStorageInfo::OverlapInLevel(int level,
                                         const Slice* smallest_user_key,
                                         const Slice* largest_user_key) {
