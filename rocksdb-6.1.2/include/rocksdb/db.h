@@ -295,6 +295,7 @@ class DB {
   // If "key" already exists, it will be overwritten.
   // Returns OK on success, and a non-OK status on error.
   // Note: consider setting options.sync = true.
+  // 设置db项{key, value}  
   virtual Status Put(const WriteOptions& options,
                      ColumnFamilyHandle* column_family, const Slice& key,
                      const Slice& value) = 0;
@@ -306,7 +307,7 @@ class DB {
   // Remove the database entry (if any) for "key".  Returns OK on
   // success, and a non-OK status on error.  It is not an error if "key"
   // did not exist in the database.
-  // Note: consider setting options.sync = true.
+  // 在db中删除"key"，key不存在依然返回成功  
   virtual Status Delete(const WriteOptions& options,
                         ColumnFamilyHandle* column_family,
                         const Slice& key) = 0;
@@ -369,6 +370,8 @@ class DB {
   // options.sync=true.
   // Returns OK on success, non-OK on failure.
   // Note: consider setting options.sync = true.
+
+  // 更新操作
   virtual Status Write(const WriteOptions& options, WriteBatch* updates) = 0;
 
   // If the database contains an entry for "key" store the
@@ -378,6 +381,7 @@ class DB {
   // a status for which Status::IsNotFound() returns true.
   //
   // May return some other Status on an error.
+  // 获取操作，如果db中有"key"项则返回结果，没有就返回Status::IsNotFound()  
   virtual inline Status Get(const ReadOptions& options,
                             ColumnFamilyHandle* column_family, const Slice& key,
                             std::string* value) {
@@ -448,6 +452,9 @@ class DB {
   //
   // Caller should delete the iterator when it is no longer needed.
   // The returned iterator should be deleted before this db is deleted.
+  
+  // 返回heap分配的iterator，访问db的内容，返回的iterator的位置是invalid的  
+  // 在使用之前，调用者必须先调用Seek。  
   virtual Iterator* NewIterator(const ReadOptions& options,
                                 ColumnFamilyHandle* column_family) = 0;
   virtual Iterator* NewIterator(const ReadOptions& options) {
@@ -468,10 +475,14 @@ class DB {
   //
   // nullptr will be returned if the DB fails to take a snapshot or does
   // not support snapshot.
+  
+  // 返回当前db状态的handle，和handle一起创建的Iterator看到的都是  
+  // 当前db状态的稳定快照。不再使用时，应该调用ReleaseSnapshot(result)  
   virtual const Snapshot* GetSnapshot() = 0;
 
   // Release a previously acquired snapshot.  The caller must not
   // use "snapshot" after this call.
+  // 释放获取的db快照  
   virtual void ReleaseSnapshot(const Snapshot* snapshot) = 0;
 
 #ifndef ROCKSDB_LITE
@@ -692,6 +703,16 @@ class DB {
   // If "property" is a valid property understood by this DB implementation (see
   // Properties struct above for valid options), fills "*value" with its current
   // value and returns true.  Otherwise, returns false.
+
+  
+  // 借此方法DB实现可以展现它们的属性状态. 如果"property" 是合法的，  
+  // 设置"*value"为属性的当前状态值并返回true，否则返回false.  
+  // 合法属性名包括：  
+
+  //  >"leveldb.num-files-at-level<N>"- 返回level <N>的文件个数,  
+  //     <N> 是level 数的ASCII 值 (e.g. "0").  
+  //  >"leveldb.stats" - 返回描述db内部操作统计的多行string  
+  //  >"leveldb.sstables" - 返回一个多行string，描述构成db内容的所有sstable  
   virtual bool GetProperty(ColumnFamilyHandle* column_family,
                            const Slice& property, std::string* value) = 0;
   virtual bool GetProperty(const Slice& property, std::string* value) {
@@ -834,6 +855,15 @@ class DB {
   // the files. In this case, client could set options.change_level to true, to
   // move the files back to the minimum level capable of holding the data set
   // or a given level (specified by non-negative options.target_level).
+
+  
+  // Compactkey范围[*begin,*end]的底层存储，删除和被覆盖的版本将会被抛弃  
+  // 数据会被重新组织，以减少访问开销  
+  // 注：那些不了解底层实现的用户不应该调用该方法。  
+  //begin==NULL被当作db中所有key之前的key.  
+  //end==NULL被当作db中所有key之后的key.  
+  // 所以下面的调用将会compact整个db:  
+  //    db->CompactRange(NULL, NULL);  
   virtual Status CompactRange(const CompactRangeOptions& options,
                               ColumnFamilyHandle* column_family,
                               const Slice* begin, const Slice* end) = 0;
@@ -1311,6 +1341,9 @@ class DB {
 
 // Destroy the contents of the specified database.
 // Be very careful using this method.
+
+// 最后是两个全局函数--删除和修复DB  
+// 要小心，该方法将删除指定db的所有内容  
 Status DestroyDB(const std::string& name, const Options& options,
                  const std::vector<ColumnFamilyDescriptor>& column_families =
                      std::vector<ColumnFamilyDescriptor>());
@@ -1325,6 +1358,9 @@ Status DestroyDB(const std::string& name, const Options& options,
 // specified in column_families.
 //
 // @param column_families Descriptors for known column families
+
+// 如果db不能打开了，你可能调用该方法尝试纠正尽可能多的数据  
+// 可能会丢失数据，所以调用时要小心  
 Status RepairDB(const std::string& dbname, const DBOptions& db_options,
                 const std::vector<ColumnFamilyDescriptor>& column_families);
 

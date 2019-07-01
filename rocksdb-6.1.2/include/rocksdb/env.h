@@ -906,6 +906,9 @@ enum InfoLogLevel : unsigned char {
 此时如果系统崩溃，内存中的数据还没有来得及Dump到磁盘，所以会丢失数据（Redis就存在这个问题）。为了避免这种情况，
 rocksdb在写入内存前先将操作记录到Log文件中，然后再记入内存中，这样即使系统崩溃，也可以从Log文件中恢复内存中的Memtable，
 不会造成数据的丢失。
+
+   log文件包含了最新的db更新，每个更新都以append的方式追加到文件结尾。当log文件达到预定大小时（缺省大约4MB），
+leveldb就把它转换为一个有序表，并创建一个新的log文件。
 */
 //类Logger，log文件的写入接口 LoggerWrapper类继承该类
 class Logger { //PosixLogger继承该类

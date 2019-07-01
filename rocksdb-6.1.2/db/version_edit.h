@@ -190,6 +190,13 @@ struct LevelFilesBrief {
 };
 
 /*
+  每次文件有变动时，leveldb就把变动记录到一个VersionEdit变量中，然后通过VersionEdit把变动应用到current version上，
+并把current version的快照，也就是db元信息保存到MANIFEST文件中。
+
+  MANIFEST文件组织是以VersionEdit的形式写入的，它本身是一个log文件格式，采用log::Writer/Reader的方式读写，
+一个VersionEdit就是一条log record。
+
+
 VersionSet 是所有Version的集合，管理着所有存活的Version。
 　VersionEdit 表示Version之间的变化，相当于delta 增量，表示有增加了多少文件，删除了文件。下图表示他们之间的关系。
 Version0 +VersionEdit-->Version1
@@ -199,7 +206,8 @@ class VersionEdit {
  public:
   VersionEdit() { Clear(); }
   ~VersionEdit() { }
-
+  
+  // 清空信息  
   void Clear();
 
   void SetComparatorName(const Slice& name) {
@@ -242,6 +250,10 @@ class VersionEdit {
   // Add the specified file at the specified number.
   // REQUIRES: This version has not been saved (see VersionSet::SaveTo)
   // REQUIRES: "smallest" and "largest" are smallest and largest keys in file
+  
+  // 添加sstable文件信息，要求：DB元信息还没有写入磁盘Manifest文件  
+  // @level：.sst文件层次；@file 文件编号-用作文件名 @size 文件大小  
+  // @smallest, @largest：sst文件包含k/v对的最大最小key  
   void AddFile(int level, uint64_t file, uint32_t file_path_id,
                uint64_t file_size, const InternalKey& smallest,
                const InternalKey& largest, const SequenceNumber& smallest_seqno,
@@ -265,6 +277,7 @@ class VersionEdit {
   }
 
   // Delete the specified "file" from the specified "level".
+  // 从指定的level删除文件  
   void DeleteFile(int level, uint64_t file) {
     deleted_files_.insert({level, file});
   }
@@ -298,11 +311,14 @@ class VersionEdit {
   }
 
   // return true on success.
+   // 将信息Encode到一个string中  
   bool EncodeTo(std::string* dst) const;
+   // 从Slice中Decode出DB元信息  
   Status DecodeFrom(const Slice& src);
 
   const char* DecodeNewFile4From(Slice* input);
 
+  //===================下面是成员变量，由此可大概窥得DB元信息的内容。 
   typedef std::set<std::pair<int, uint64_t>> DeletedFileSet;
 
   const DeletedFileSet& GetDeletedFiles() { return deleted_files_; }
@@ -326,23 +342,32 @@ class VersionEdit {
   bool GetLevel(Slice* input, int* level, const char** msg);
 
   int max_level_;
-  std::string comparator_;
-  uint64_t log_number_;
+  std::string comparator_; // key comparator名字  
+  uint64_t log_number_; // 日志编号  
+  // 前一个日志编号  
   uint64_t prev_log_number_;
+   // 下一个文件编号  
   uint64_t next_file_number_;
   uint32_t max_column_family_;
   // The most recent WAL log number that is deleted
   uint64_t min_log_number_to_keep_;
   SequenceNumber last_sequence_;
+  // 是否有comparator  
   bool has_comparator_;
+  // 是否有log_number_  
   bool has_log_number_;
+  // 是否有prev_log_number_  
   bool has_prev_log_number_;
+  // 是否有next_file_number_  
   bool has_next_file_number_;
+  // 是否有last_sequence_  
   bool has_last_sequence_;
   bool has_max_column_family_;
   bool has_min_log_number_to_keep_;
 
+  // 删除文件集合  
   DeletedFileSet deleted_files_;
+  // 新文件集合  
   std::vector<std::pair<int, FileMetaData>> new_files_;
 
   // Each version edit record should have column_family_ set

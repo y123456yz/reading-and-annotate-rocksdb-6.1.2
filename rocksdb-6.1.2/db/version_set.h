@@ -1039,15 +1039,18 @@ class VersionSet {
       uint64_t* min_log_number_to_keep, uint32_t* max_column_family);
 
   std::unique_ptr<ColumnFamilySet> column_family_set_;
-
+  // 操作系统封装  
   Env* const env_;
   const std::string dbname_;
   const ImmutableDBOptions* const db_options_;
+
+  // log文件编号  
   std::atomic<uint64_t> next_file_number_;
   // Any log number equal or lower than this should be ignored during recovery,
   // and is qualified for being deleted in 2PC mode. In non-2PC mode, this
   // number is ignored.
   std::atomic<uint64_t> min_log_number_to_keep_2pc_ = {0};
+   // manifest文件编号  
   uint64_t manifest_file_number_;
   uint64_t options_file_number_;
   uint64_t pending_manifest_file_number_;
