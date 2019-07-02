@@ -586,6 +586,7 @@ class ColumnFamilySet {
 // memtables of different column families (specified by ID in the write batch)
 class ColumnFamilyMemTablesImpl : public ColumnFamilyMemTables {
  public:
+  //DBImpl::DBImpl
   explicit ColumnFamilyMemTablesImpl(ColumnFamilySet* column_family_set)
       : column_family_set_(column_family_set), current_(nullptr) {}
 

@@ -217,6 +217,8 @@ static Status ValidateOptions(
   return Status::OK();
 }
 }  // namespace
+
+//创建新DB
 Status DBImpl::NewDB() {
   VersionEdit new_db;
   new_db.SetLogNumber(0);
@@ -249,6 +251,7 @@ Status DBImpl::NewDB() {
   }
   if (s.ok()) {
     // Make "CURRENT" file that points to the new manifest file.
+    //如果成功，就把MANIFEST文件名写入到CURRENT文件中  
     s = SetCurrentFile(env_, dbname_, 1, directories_.GetDbDir());
   } else {
     env_->DeleteFile(manifest);
@@ -505,6 +508,8 @@ Status DBImpl::Recover(
 }
 
 // REQUIRES: log_numbers are sorted in ascending order
+//该函数打开指定的log文件，回放日志。期间可能会执行compaction，
+//生产新的level 0sstable文件，记录文件变动到edit中。
 Status DBImpl::RecoverLogFiles(const std::vector<uint64_t>& log_numbers,
                                SequenceNumber* next_sequence, bool read_only) {
   struct LogReporter : public log::Reader::Reporter {
@@ -1154,8 +1159,12 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
   impl->mutex_.Lock();
   auto write_hint = impl->CalculateWALWriteHint();
   // Handles create_if_missing, error_if_exists
+  //锁定并试图做Recover操作。Recover操作用来处理创建flag，比如存在就返回失败等等，尝试从已存在的sstable文件恢复db
   s = impl->Recover(column_families);
   if (s.ok()) {
+  	//如果Recover返回成功，则调用VersionSet取得新的log文件编号--实际上是在当前基础上+1，
+  	//准备新的log文件。如果log文件创建成功，则根据log文件创建log::Writer。然后执行
+  	//VersionSet::LogAndApply，根据edit记录的增量变动生成新的current version，并写入MANIFEST文件。
     uint64_t new_log_number = impl->versions_->NewFileNumber();
     std::unique_ptr<WritableFile> lfile;
     EnvOptions soptions(db_options);
@@ -1228,6 +1237,7 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
       if (impl->two_write_queues_) {
         impl->log_write_mutex_.Unlock();
       }
+	  //删除过期文件
       impl->DeleteObsoleteFiles();
       s = impl->directories_.GetDbDir()->Fsync();
     }

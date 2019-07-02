@@ -613,6 +613,7 @@ double LRUCache::GetHighPriPoolRatio() {
   return result;
 }
 
+//DBImpl::DBImpl
 std::shared_ptr<Cache> NewLRUCache(const LRUCacheOptions& cache_opts) {
   return NewLRUCache(cache_opts.capacity, cache_opts.num_shard_bits,
                      cache_opts.strict_capacity_limit,
@@ -621,7 +622,7 @@ std::shared_ptr<Cache> NewLRUCache(const LRUCacheOptions& cache_opts) {
                      cache_opts.use_adaptive_mutex);
 }
 
-//
+//NewLRUCache
 // 创建Cache的全局方法，capacity为容量大小
 std::shared_ptr<Cache> NewLRUCache(
     size_t capacity, int num_shard_bits, bool strict_capacity_limit,

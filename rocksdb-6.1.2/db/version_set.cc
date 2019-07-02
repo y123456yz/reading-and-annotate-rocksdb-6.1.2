@@ -2795,6 +2795,7 @@ struct VersionSet::ManifestWriter {
         edit_list(e) {}
 };
 
+//DBImpl::DBImpl÷– π”√
 VersionSet::VersionSet(const std::string& dbname,
                        const ImmutableDBOptions* _db_options,
                        const EnvOptions& storage_options, Cache* table_cache,

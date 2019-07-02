@@ -550,6 +550,8 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
   TEST_SYNC_POINT("DBImpl::PurgeObsoleteFiles:End");
 }
 
+//这个是垃圾回收函数，如前所述，每次compaction和recovery之后都会有文件被废弃。
+//DeleteObsoleteFiles就是删除这些垃圾文件的，它在每次compaction和recovery完成之后被调用。
 void DBImpl::DeleteObsoleteFiles() {
   mutex_.AssertHeld();
   JobContext job_context(next_job_id_.fetch_add(1));
