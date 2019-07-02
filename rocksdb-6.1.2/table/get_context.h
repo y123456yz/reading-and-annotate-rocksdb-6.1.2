@@ -46,7 +46,7 @@ class GetContext {
     kNotFound,
     kFound,
     kDeleted,
-    kCorrupt,
+    kCorrupt, // Êý¾ÝËð»µ  
     kMerge,  // saver contains the current merge result (the operands)
     kBlobIndex,
   };

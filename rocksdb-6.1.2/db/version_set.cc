@@ -431,6 +431,7 @@ bool SomeFileOverlapsRange(
     const Slice* smallest_user_key,
     const Slice* largest_user_key) {
   const Comparator* ucmp = icmp.user_comparator();
+  //乱序、可能相交的文件集合，依次查找  
   if (!disjoint_sorted_files) {
     // Need to check against all files
     for (size_t i = 0; i < file_level.num_files; i++) {
@@ -439,12 +440,14 @@ bool SomeFileOverlapsRange(
           BeforeFile(ucmp, largest_user_key, f)) {
         // No overlap
       } else {
+        // 有重合  
         return true;  // Overlap
       }
     }
     return false;
   }
 
+  //有序&互不相交，直接二分查找  
   // Binary search over file list
   uint32_t index = 0;
   if (smallest_user_key != nullptr) {
@@ -454,11 +457,12 @@ bool SomeFileOverlapsRange(
     index = FindFile(icmp, file_level, small.Encode());
   }
 
-  if (index >= file_level.num_files) {
+  if (index >= file_level.num_files) {// 不存在比smallest_user_key小的key  
     // beginning of range is after all files, so no overlap.
     return false;
   }
-
+  
+  //保证在largest_user_key之后	
   return !BeforeFile(ucmp, largest_user_key, &file_level.files[index]);
 }
 
@@ -993,12 +997,16 @@ double VersionStorageInfo::GetEstimatedCompressionRatioAtLevel(
   return static_cast<double>(sum_data_size_bytes) / sum_file_size_bytes;
 }
 
+//函数最终在DB::NewIterators()接口中被调用，调用层次为：
+//	DBImpl::NewIterator()->DBImpl::NewInternalIterator()->Version::AddIterators()。
+//	函数功能是为该Version中的所有sstable都创建一个Two Level Iterator，以遍历sstable的内容。
 void Version::AddIterators(const ReadOptions& read_options,
                            const EnvOptions& soptions,
                            MergeIteratorBuilder* merge_iter_builder,
                            RangeDelAggregator* range_del_agg) {
   assert(storage_info_.finalized_);
 
+  //每级level轮询遍历
   for (int level = 0; level < storage_info_.num_non_empty_levels(); level++) {
     AddIteratorsForLevel(read_options, soptions, merge_iter_builder, level,
                          range_del_agg);
@@ -1022,6 +1030,7 @@ void Version::AddIteratorsForLevel(const ReadOptions& read_options,
   bool should_sample = should_sample_file_read();
 
   auto* arena = merge_iter_builder->GetArena();
+  //对于level=0级别的sstable文件，直接装入cache，level0的sstable文件可能有重合，需要merge。
   if (level == 0) {
     // Merge all level zero files together since they may overlap
     for (size_t i = 0; i < storage_info_.LevelFilesBrief(0).num_files; i++) {
@@ -1045,6 +1054,7 @@ void Version::AddIteratorsForLevel(const ReadOptions& read_options,
     // For levels > 0, we can use a concatenating iterator that sequentially
     // walks through the non-overlapping files in the level, opening them
     // lazily.
+    //对于level>0级别的sstable文件，lazy open机制，它们不会有重叠。
     auto* mem = arena->AllocateAligned(sizeof(LevelIterator));
     merge_iter_builder->AddIterator(new (mem) LevelIterator(
         cfd_->table_cache(), read_options, soptions,
@@ -1187,6 +1197,7 @@ Version::Version(ColumnFamilyData* column_family_data, VersionSet* vset,
       mutable_cf_options_(mutable_cf_options),
       version_number_(version_number) {}
 
+//查找函数，直接在DBImpl::Get()中被调用
 void Version::Get(const ReadOptions& read_options, const LookupKey& k,
                   PinnableSlice* value, Status* status,
                   MergeContext* merge_context,
@@ -1258,13 +1269,13 @@ void Version::Get(const ReadOptions& read_options, const LookupKey& k,
       get_context.ReportCounters();
     }
     switch (get_context.State()) {
-      case GetContext::kNotFound:
+      case GetContext::kNotFound: // 继续搜索下一个更早的sstable文件  
         // Keep searching in other files
         break;
       case GetContext::kMerge:
         // TODO: update per-level perfcontext user_key_return_count for kMerge
         break;
-      case GetContext::kFound:
+      case GetContext::kFound: // 找到 
         if (fp.GetHitFileLevel() == 0) {
           RecordTick(db_statistics_, GET_HIT_L0);
         } else if (fp.GetHitFileLevel() == 1) {
@@ -1274,11 +1285,12 @@ void Version::Get(const ReadOptions& read_options, const LookupKey& k,
         }
         PERF_COUNTER_BY_LEVEL_ADD(user_key_return_count, 1, fp.GetHitFileLevel());
         return;
-      case GetContext::kDeleted:
+      case GetContext::kDeleted: // 已删除  
         // Use empty error message for speed
+        // 为了效率，使用空的错误字符串  
         *status = Status::NotFound();
         return;
-      case GetContext::kCorrupt:
+      case GetContext::kCorrupt: // 数据损坏  
         *status = Status::Corruption("corrupted key for ", user_key);
         return;
       case GetContext::kBlobIndex:
@@ -1395,6 +1407,13 @@ void VersionStorageInfo::RemoveCurrentStats(FileMetaData* file_meta) {
   }
 }
 
+/*
+当Get操作直接搜寻memtable没有命中时，就需要调用Version::Get()函数从磁盘load数据文件并查找。
+ 如果此次Get不止seek了一个文件，就记录第一个文件到stat并返回。其后leveldb就会调用UpdateStats(stat)。
+Stat表明在指定key range查找key时，都要先seek此文件，才能在后续的sstable文件中找到key。
+该函数是将stat记录的sstable文件的allowed_seeks减1，减到0就执行compaction。也就是说如果文件被seek
+ 的次数超过了限制，表明读取效率已经很低，需要执行compaction了。所以说allowed_seeks是对compaction流程的有一个优化。
+*/
 void Version::UpdateAccumulatedStats(bool update_stats) {
   if (update_stats) {
     // maximum number of table properties loaded from files.
@@ -2060,6 +2079,8 @@ bool Version::Unref() {
 // 如果指定level中的某些文件和[*smallest_user_key,*largest_user_key]有重合就返回true。
 // @smallest_user_key==NULL表示比DB中所有key都小的key.  
 // @largest_user_key==NULL表示比DB中所有key都大的key.  
+
+//检查是否和指定level的文件有重合
 bool VersionStorageInfo::OverlapInLevel(int level,
                                         const Slice* smallest_user_key,
                                         const Slice* largest_user_key) {
@@ -2076,6 +2097,8 @@ bool VersionStorageInfo::OverlapInLevel(int level,
 // If hint_index is specified, then it points to a file in the
 // overlapping range.
 // The file_index returns a pointer to any file in an overlapping range.
+
+//它在指定level中找出和[begin, end]有重合的sstable文件
 void VersionStorageInfo::GetOverlappingInputs(
     int level, const InternalKey* begin, const InternalKey* end,
     std::vector<FileMetaData*>* inputs, int hint_index, int* file_index,
@@ -2401,12 +2424,14 @@ void VersionStorageInfo::ExtendFileRangeWithinInterval(
   *end_index = right;
 }
 
+// 返回指定level中所有sstable文件大小的和  
 uint64_t VersionStorageInfo::NumLevelBytes(int level) const {
   assert(level >= 0);
   assert(level < num_levels());
   return TotalFileSize(files_[level]);
 }
 
+//返回一个可读的单行信息--每个level的文件数，保存在*scratch中  
 const char* VersionStorageInfo::LevelSummary(
     LevelSummaryStorage* scratch) const {
   int len = 0;
@@ -2466,6 +2491,8 @@ const char* VersionStorageInfo::LevelFileSummary(FileSummaryStorage* scratch,
   return scratch->buffer;
 }
 
+// 对于所有level>0，遍历文件，找到和下一层文件的重叠数据的最大值(in bytes)  
+// 这个就是Version::GetOverlappingInputs()函数的简单应用  
 int64_t VersionStorageInfo::MaxNextLevelOverlappingBytes() {
   uint64_t result = 0;
   std::vector<FileMetaData*> overlaps;
@@ -3523,6 +3550,7 @@ Status VersionSet::GetCurrentManifestPath(std::string* manifest_path) {
   return Status::OK();
 }
 
+//恢复函数，从磁盘恢复最后保存的元信息
 Status VersionSet::Recover(
     const std::vector<ColumnFamilyDescriptor>& column_families,
     bool read_only) {
@@ -4134,6 +4162,7 @@ Status VersionSet::DumpManifest(Options& options, std::string& dscname,
 }
 #endif  // ROCKSDB_LITE
 
+//标记指定的文件编号已经被使用了
 void VersionSet::MarkFileNumberUsed(uint64_t number) {
   // only called during recovery and repair which are single threaded, so this
   // works because there can't be concurrent calls
@@ -4326,6 +4355,7 @@ uint64_t VersionSet::ApproximateSize(Version* v, const FdWithKeyRange& f,
   return result;
 }
 
+// 获取函数，把所有version的所有level的文件加入到@live中  
 void VersionSet::AddLiveFiles(std::vector<FileDescriptor>* live_list) {
   // pre-calculate space requirement
   int64_t total_files = 0;

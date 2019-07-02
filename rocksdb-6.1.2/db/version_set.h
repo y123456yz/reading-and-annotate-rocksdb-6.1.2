@@ -535,6 +535,10 @@ class VersionStorageInfo {
   void operator=(const VersionStorageInfo&) = delete;
 };
 
+/*
+Version是管理某个版本的所有sstable的类，就其导出接口而言，无非是遍历sstable，查找k/v。
+ 以及为compaction做些事情，给定range，检查重叠情况。
+*/
 class Version {
  public:
   // Append to *iters a sequence of iterators that will
@@ -813,6 +817,7 @@ class VersionSet {
   // Recover the last saved descriptor from persistent storage.
   // If read_only == true, Recover() will not complain if some column families
   // are not opened
+  //恢复函数，从磁盘恢复最后保存的元信息
   Status Recover(const std::vector<ColumnFamilyDescriptor>& column_families,
                  bool read_only = false);
 
@@ -858,6 +863,7 @@ class VersionSet {
   }
 
   // Allocate and return a new file number
+  // 分配并返回新的文件编号  
   uint64_t NewFileNumber() { return next_file_number_.fetch_add(1); }
 
   // Fetch And Add n new file number
@@ -1044,7 +1050,7 @@ class VersionSet {
   const std::string dbname_;
   const ImmutableDBOptions* const db_options_;
 
-  // log文件编号  
+  // log文件编号   NewFileNumber
   std::atomic<uint64_t> next_file_number_;
   // Any log number equal or lower than this should be ignored during recovery,
   // and is qualified for being deleted in 2PC mode. In non-2PC mode, this
