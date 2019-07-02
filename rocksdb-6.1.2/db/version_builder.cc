@@ -80,9 +80,10 @@ class VersionBuilder::Rep {
     }
   };
 
-  struct LevelState {
+  struct LevelState { // 这个是记录添加和删除的文件  
     std::unordered_set<uint64_t> deleted_files;
     // Map from file number to file meta data.
+    // 保证添加文件的顺序是有效定义的  
     std::unordered_map<uint64_t, FileMetaData*> added_files;
   };
 
@@ -267,6 +268,7 @@ class VersionBuilder::Rep {
     CheckConsistency(base_vstorage_);
 
     // Delete files
+    // 把edit记录的已删除文件应用到当前状态
     const VersionEdit::DeletedFileSet& del = edit->GetDeletedFiles();
     for (const auto& del_file : del) {
       const auto level = del_file.first;
@@ -292,6 +294,7 @@ class VersionBuilder::Rep {
     }
 
     // Add new files
+    //把edit记录的新加文件应用到当前状态
     for (const auto& new_file : edit->GetNewFiles()) {
       const int level = new_file.first;
       if (level < num_levels_) {
@@ -315,6 +318,9 @@ class VersionBuilder::Rep {
   }
 
   // Save the current state in *v.
+  //把当前的状态存储到v中返回
+  //For循环遍历所有的level[0, config::kNumLevels-1]，把新加的文件和已存在的文件merge在一起，
+  // 丢弃已删除的文件，结果保存在v中。对于level> 0，还要确保集合中的文件没有重合。
   void SaveTo(VersionStorageInfo* vstorage) {
     CheckConsistency(base_vstorage_);
     CheckConsistency(vstorage);
@@ -461,6 +467,7 @@ class VersionBuilder::Rep {
     return Status::OK();
   }
 
+  //将f加入到levels_[level]文件set中。
   void MaybeAddFile(VersionStorageInfo* vstorage, int level, FileMetaData* f) {
     if (levels_[level].deleted_files.count(f->fd.GetNumber()) > 0) {
       // f is to-be-deleted table file

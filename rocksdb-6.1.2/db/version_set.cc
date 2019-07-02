@@ -2839,6 +2839,7 @@ VersionSet::~VersionSet() {
   obsolete_files_.clear();
 }
 
+//把v加入到versionset中，并设置为current version。并对老的current version执行Uref()。
 void VersionSet::AppendVersion(ColumnFamilyData* column_family_data,
                                Version* v) {
   // compute new compaction score
@@ -3551,6 +3552,7 @@ Status VersionSet::GetCurrentManifestPath(std::string* manifest_path) {
 }
 
 //恢复函数，从磁盘恢复最后保存的元信息
+//Recover就是根据CURRENT指定的MANIFEST，读取db元信息到this VersionSet对象的第二组成员中（db元信息）
 Status VersionSet::Recover(
     const std::vector<ColumnFamilyDescriptor>& column_families,
     bool read_only) {
@@ -3564,6 +3566,7 @@ Status VersionSet::Recover(
   std::unordered_map<int, std::string> column_families_not_found;
 
   // Read "CURRENT" file, which contains a pointer to the current manifest file
+  //读取CURRENT文件，获得最新的MANIFEST文件名，根据文件名打开MANIFEST文件。CURRENT文件以\n结尾，读取后需要trim下。
   std::string manifest_path;
   Status s = GetCurrentManifestPath(&manifest_path);
   if (!s.ok()) {
@@ -3629,6 +3632,9 @@ Status VersionSet::Recover(
     std::string scratch;
     std::vector<VersionEdit> replay_buffer;
     size_t num_entries_decoded = 0;
+	//读取MANIFEST内容，MANIFEST是以log的方式写入的，因此这里调用的是log::Reader来读取。
+	//然后调用VersionEdit::DecodeFrom，从内容解析出VersionEdit对象，并将VersionEdit记录
+	//的改动应用到versionset中。读取MANIFEST中的log number, prev log number, nextfile number, last sequence。
     while (reader.ReadRecord(&record, &scratch) && s.ok()) {
       VersionEdit edit;
       s = edit.DecodeFrom(record);
@@ -3706,6 +3712,7 @@ Status VersionSet::Recover(
 
     // When reading DB generated using old release, min_log_number_to_keep=0.
     // All log files will be scanned for potential prepare entries.
+    //将读取到的log number, prev log number标记为已使用
     MarkMinLogNumberToKeep2PC(min_log_number_to_keep);
     MarkFileNumberUsed(previous_log_number);
     MarkFileNumberUsed(log_number);
@@ -3736,7 +3743,7 @@ Status VersionSet::Recover(
     }
   }
 
-  if (s.ok()) {
+  if (s.ok()) { //如果一切顺利就创建新的Version，并应用读取的几个number。
     for (auto cfd : *column_family_set_) {
       if (cfd->IsDropped()) {
         continue;
@@ -4179,6 +4186,7 @@ void VersionSet::MarkMinLogNumberToKeep2PC(uint64_t number) {
   }
 }
 
+//把current version保存到*log中，信息包括comparator名字、compaction点和各级sstable文件，
 Status VersionSet::WriteSnapshot(log::Writer* log) {
   // TODO: Break up into multiple records to reduce memory usage on recovery?
 
