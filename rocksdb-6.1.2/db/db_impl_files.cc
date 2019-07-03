@@ -181,6 +181,8 @@ void DBImpl::FindObsoleteFiles(JobContext* job_context, bool force,
 
   // logs_ is empty when called during recovery, in which case there can't yet
   // be any tracked obsolete logs
+  //遍历所有的WAL，然后找出log_number小于当前min_log_number的
+  //文件然后加入到对应的结构(log_delete_files).
   if (!alive_log_files_.empty() && !logs_.empty()) {
     uint64_t min_log_number = job_context->log_number;
     size_t num_alive_log_files = alive_log_files_.size();

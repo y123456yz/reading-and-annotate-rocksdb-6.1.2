@@ -766,12 +766,14 @@ void rocksdb_column_family_handle_destroy(rocksdb_column_family_handle_t* handle
   delete handle;
 }
 
+//写入会调用
 void rocksdb_put(
     rocksdb_t* db,
     const rocksdb_writeoptions_t* options,
     const char* key, size_t keylen,
     const char* val, size_t vallen,
     char** errptr) {
+  //DB::Put
   SaveError(errptr,
             db->rep->Put(options->rep, Slice(key, keylen), Slice(val, vallen)));
 }

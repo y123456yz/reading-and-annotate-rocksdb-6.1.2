@@ -51,6 +51,7 @@ void DBImpl::SetRecoverableStatePreReleaseCallback(
   recoverable_state_pre_release_callback_.reset(callback);
 }
 
+//DB::Put
 Status DBImpl::Write(const WriteOptions& write_options, WriteBatch* my_batch) {
   return WriteImpl(write_options, my_batch, nullptr, nullptr);
 }
@@ -66,6 +67,8 @@ Status DBImpl::WriteWithCallback(const WriteOptions& write_options,
 // The main write queue. This is the only write queue that updates LastSequence.
 // When using one write queue, the same sequence also indicates the last
 // published sequence.
+//DBImpl::Write
+//写入实现在这里
 Status DBImpl::WriteImpl(const WriteOptions& write_options,
                          WriteBatch* my_batch, WriteCallback* callback,
                          uint64_t* log_used, uint64_t log_ref,
@@ -125,7 +128,16 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
   }
 
   StopWatch write_sw(env_, immutable_db_options_.statistics.get(), DB_WRITE);
+  // 将当前写入任务@w挂入写队列，并在mutex_上睡眠等待。等待直到:  
+  //  1) 写操作设置了超时时间，等待超时。或，  
+  //  2) @w之前的任务都已完成，@w已处于队列头部。或，  
+  //  3) @w这个写任务被别的写线程完成了。  
+  // 第3个条件，任务被别的写线程完成，实际上是被之前的写任务合并进一个	
+  // WriteBatchGroup中去了。此时的@w会被标记成in_batch_group。有意思的是，在JoinBatchGroup()	
+  // 里面，如果因为超时唤醒了，发现当前任务in_batch_group为true，则会继续等待，  
+  // 因为它已经被别的线程加入BatchGroup准备写入数据库了。
 
+  //将要带有要写的batch的Write加入写的队列当中
   write_thread_.JoinBatchGroup(&w);
   if (w.state == WriteThread::STATE_PARALLEL_MEMTABLE_WRITER) {
     // we are a non-leader in a parallel group
@@ -1577,16 +1589,18 @@ size_t DBImpl::GetWalPreallocateBlockSize(uint64_t write_buffer_size) const {
 
 // Default implementations of convenience methods that subclasses of DB
 // can call if they wish
+//rocksdb_put
 Status DB::Put(const WriteOptions& opt, ColumnFamilyHandle* column_family,
                const Slice& key, const Slice& value) {
   // Pre-allocate size of write batch conservatively.
   // 8 bytes are taken by header, 4 bytes for count, 1 byte for type,
   // and we allocate 11 extra bytes for key length, as well as value length.
-  WriteBatch batch(key.size() + value.size() + 24);
+  WriteBatch batch(key.size() + value.size() + 24);//设置Batch
   Status s = batch.Put(column_family, key, value);
   if (!s.ok()) {
     return s;
   }
+  //写Batch
   return Write(opt, &batch);
 }
 

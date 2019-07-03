@@ -1312,6 +1312,8 @@ class DBImpl : public DB {
   // reffered by back() without mutex_. With two_write_queues_, writes
   // are protected by locking both mutex_ and log_write_mutex_, and reads must
   // be under either mutex_ or log_write_mutex_.
+  //alive的wal文件，等对应的memtable flush到sstable文件后，会触发删除
+  //DBImpl::FindObsoleteFiles
   std::deque<LogFileNumberSize> alive_log_files_;
   // Log files that aren't fully synced, and the current log file.
   // Synchronization:
@@ -1380,6 +1382,7 @@ class DBImpl : public DB {
 
   WriteBufferManager* write_buffer_manager_;
 
+  //参考DBImpl::WriteImpl
   WriteThread write_thread_;
   WriteBatch tmp_batch_;
   // The write thread when the writers have no memtable write. This will be used

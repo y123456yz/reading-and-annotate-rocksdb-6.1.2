@@ -41,6 +41,7 @@ typedef void (*UnrefHandler)(void* ptr);
 // the same A.  However, a ThreadLocalPtr that is defined under the
 // scope of DBImpl can avoid such confliction.  As a result, its memory
 // usage would be O(# of threads * # of ThreadLocalPtr instances).
+//可以参考下http://kernelmaker.github.io/Rocksdb_Study_2 
 class ThreadLocalPtr {
  public:
   explicit ThreadLocalPtr(UnrefHandler handler = nullptr);
@@ -92,7 +93,7 @@ class ThreadLocalPtr {
   class StaticMeta;
 
 private:
-
+  // ThreadLocalPtr::Instance
   static StaticMeta* Instance();
 
   const uint32_t id_;

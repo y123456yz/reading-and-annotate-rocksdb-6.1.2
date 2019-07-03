@@ -57,6 +57,13 @@ uint8_t WriteThread::BlockingAwaitState(Writer* w, uint8_t goal_mask) {
   return state;
 }
 
+/*
+条件锁因为Context Switches而代价高昂，rocksdb通过一系列优化来尽量少用条件锁的使用
+并且尽可能的减少Context Switches。它将leveldb简单一条pthread_cond_wait拆成3步来做:
+1. Loop
+2. Short-Wait: Loop + std::this_thread::yield()
+3. Long-Wait: std::condition_variable::wait()
+*/
 uint8_t WriteThread::AwaitState(Writer* w, uint8_t goal_mask,
                                 AdaptationContext* ctx) {
   uint8_t state;
@@ -69,11 +76,22 @@ uint8_t WriteThread::AwaitState(Writer* w, uint8_t goal_mask,
   // is the effect of the pause instruction), so 200 iterations is a bit
   // more than a microsecond.  This is long enough that waits longer than
   // this can amortize the cost of accessing the clock and yielding.
+  //通过循环忙等待一段有限的时间，大约1us，绝大多数的情况下，
+  //这1us的忙等足以让state条件满足（Leader Writer的WriteBatch执行完），
+  //而忙等待是占着CPU，不会发生Context Switches，这就减小了额外开销；
   for (uint32_t tries = 0; tries < 200; ++tries) {
     state = w->state.load(std::memory_order_acquire);
     if ((state & goal_mask) != 0) {
       return state;
     }
+
+	/*
+	发现上面的200次循环中每次都会load state变量，检查是否符合条件，
+	当Leader Writer的WriteBatch执行完，修改了这个state变量时，会产生store指令，
+	由于处理器是乱序执行的，当有了store指令后，需要重排流水线确保在store之后的
+	load指令在执行store之后再执行，而重排会带来25倍左右的性能损失。pause指令其
+	实就是延迟40左右个clock，这样可以尽可能减少流水线上的load指令，减少重排代价。
+	*/
     port::AsmVolatilePause();
   }
 
@@ -137,6 +155,27 @@ uint8_t WriteThread::AwaitState(Writer* w, uint8_t goal_mask,
   // 1/sampling_base.
   const int sampling_base = 256;
 
+  /*
+  循环判断state条件是否满足，满足则跳出循环，不满足则std::this_thread::yield()来
+  主动让出时间片，这里的循环不是无止境的，最多持续max_yield_usec_ us（默认0us，需
+  要用enable_write_thread_adaptive_yield=true来打开，打开后默认是100us）。这么做
+  是可取的，因为yield并不一定会发生Context Switches，如果线程数小于CPU的core数, 
+  也就是每个core上只有一个线程的时候，是不会发生Context Switches，花费差不多不到1us。
+  不同于Loop每次固定循环200次，Short-Wait循环的上限是100us，这100us使用CPU的高占用
+  (involuntary context switches)来换取rocksdb可能的高吞吐，如果很不幸每次100us后state
+  还没有满足条件而进去最后的Long-Wait，那么这100us做了很多无谓的Context Switches，
+  消耗了CPU。有没有什么办法来动态判断在Short-Wait中是否需要break出循环直接进行Long-Wait呢？
+  rocksdb是通过yield的持续时长来做的调整，如果yield前后间隔大于3us，并且累计3次，则认为yield
+  已经慢到足够可以通过直接Long-Wait来等待而不用进行无谓的yield。
+  */
+
+  /*
+  首先max_yield_usec_大于0，其次update_ctx等于true（1/256的概率）或者ctx->value大于0；
+  ctx->value就是这个动态的开关，如果在Short-Wait中成功等到state条件满足，则增加value，
+  如果Short-Wait没有成功等到条件满足而最终还是靠Long-Wait来等待，则减少这个value，然
+  后通过它是否大于0来决定下次是否需要进行Short-Wait，可以看到，如果Short-Wait大量命中，
+  则value一定会远大于0，每次都进行Short-Wait。
+  */
   if (max_yield_usec_ > 0) {
     update_ctx = Random::GetTLSInstance()->OneIn(sampling_base);
 
@@ -180,6 +219,7 @@ uint8_t WriteThread::AwaitState(Writer* w, uint8_t goal_mask,
     }
   }
 
+  //很不幸，前两步的尝试都没有等到条件满足，只能通过代价最高的std::condition_variable::wait()来做
   if ((state & goal_mask) == 0) {
     TEST_SYNC_POINT_CALLBACK("WriteThread::AwaitState:BlockingWaiting", w);
     state = BlockingAwaitState(w, goal_mask);

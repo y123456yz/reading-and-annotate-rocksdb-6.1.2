@@ -60,6 +60,7 @@ struct ImmutableDBOptions {
   std::vector<std::shared_ptr<EventListener>> listeners;
   bool enable_thread_tracking;
   bool enable_pipelined_write;
+  //开启后可以并发写memtable  可以参考http://kernelmaker.github.io/Rocksdb_Study_3 这里有测试结果
   bool allow_concurrent_memtable_write;
   bool enable_write_thread_adaptive_yield;
   uint64_t write_thread_max_yield_usec;

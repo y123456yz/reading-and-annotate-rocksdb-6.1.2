@@ -13,6 +13,17 @@
 #pragma once
 namespace rocksdb {
 //可以参考https://leveldb-handbook.readthedocs.io/zh/latest/journal.html
+//http://mysql.taobao.org/monthly/2018/04/09/
+
+//WAL日志写接口在DBImpl::WriteToWAL
+//创建WAL
+// 1. 新的DB被打开的时候会创建一个WAL; DB::Open->NewWritableFile
+// 2. 当一个CF(column family)被刷新到磁盘之后，也会创建新的WAL,这种情况下创建WAL是
+//    用过SwitchMemtable函数. 这个函数主要是用来切换memtable,也就是做flush之前的切
+//    换(生成新的memtable,然后把老的刷新到磁盘)
+//    DBImpl::SwitchMemtable->NewWritableFile
+//WAL的文件格式都是类似0000001.LOG这样子
+//WAL清理操作在DBImpl::FindObsoleteFiles
 namespace log {
 
 //rocksdb把日志文件切分成了大小为32KB的连续block块，block由连续的log record组成，log record的格式为：

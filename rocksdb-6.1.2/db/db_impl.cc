@@ -1988,6 +1988,7 @@ Iterator* DBImpl::NewIterator(const ReadOptions& read_options,
   return result;
 }
 
+//DBImpl::NewIterator
 ArenaWrappedDBIter* DBImpl::NewIteratorImpl(const ReadOptions& read_options,
                                             ColumnFamilyData* cfd,
                                             SequenceNumber snapshot,

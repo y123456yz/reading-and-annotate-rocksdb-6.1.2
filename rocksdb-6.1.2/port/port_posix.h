@@ -159,6 +159,7 @@ class CondVar {
 
 using Thread = std::thread;
 
+//¿ÉÒÔ²Î¿¼http://kernelmaker.github.io/Rocksdb_Study_1
 static inline void AsmVolatilePause() {
 #if defined(__i386__) || defined(__x86_64__)
   asm volatile("pause");

@@ -272,6 +272,13 @@ const char* EncodeKey(std::string* scratch, const Slice& target) {
   return scratch->data();
 }
 
+/*
+ArenaWrappedDBIter是暴露给用户的Iterator，它包含DBIter，DBIter则包含InternalIterator，
+InternalIterator顾名思义，是内部定义，MergeIterator、TwoLevelIterator、BlockIter、
+MemTableIter、LevelFileNumIterator等都是继承自InternalIterator
+图解参考http://kernelmaker.github.io/Rocksdb_Iterator
+*/
+
 class MemTableIterator : public InternalIterator {
  public:
   MemTableIterator(const MemTable& mem, const ReadOptions& read_options,

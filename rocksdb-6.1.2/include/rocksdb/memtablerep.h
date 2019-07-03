@@ -75,6 +75,10 @@ Skiplistrep.cc (memtable):  class Iterator : public MemTableRep::Iterator {
 Skiplistrep.cc (memtable):  class LookaheadIterator : public MemTableRep::Iterator {
 Vectorrep.cc (memtable):class VectorRep : public MemTableRep {
 Vectorrep.cc (memtable):  class Iterator : public MemTableRep::Iterator {
+
+和MemTableRepFactory等工程类关系可以参考
+http://mysql.taobao.org/monthly/2017/05/08/
+http://mysql.taobao.org/monthly/2018/08/08/
 */
 //SkipListRep等继承该类
 class MemTableRep {

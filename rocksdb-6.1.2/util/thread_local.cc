@@ -44,8 +44,11 @@ struct ThreadData {
       prev(nullptr),
       inst(_inst) {}
   std::vector<Entry> entries;
+  //一个线程对应一个ThreadLocalPtr::ThreadData对象，并且他们相互之间通过next和prev指针串起来
   ThreadData* next;
   ThreadData* prev;
+  //inst指针指向全局唯一的ThreadLocalPtr::StaticMeta对象（通过head_(this)来赋值，
+  //这里可以看到一个类可以在自己的初始化列表中使用将要创建出来的对象的this指针）
   ThreadLocalPtr::StaticMeta* inst;
 };
 
@@ -125,14 +128,19 @@ private:
 
   static ThreadData* GetThreadLocal();
 
+  //每个不同ThreadLocalPtr对象都有一个全局唯一id，这个id的唯一性就是通过全局唯
+  //一的ThreadLocalPtr::StaticMeta对象的next_instance_id_来递增来保证的，第一次肯定为0
   uint32_t next_instance_id_;
   // Used to recycle Ids in case ThreadLocalPtr is instantiated and destroyed
   // frequently. This also prevents it from blowing up the vector space.
+  //保存回收的id
   autovector<uint32_t> free_instance_ids_;
   // Chain all thread local structure together. This is necessary since
   // when one ThreadLocalPtr gets destroyed, we need to loop over each
   // thread's version of pointer corresponding to that instance and
   // call UnrefHandler for it.
+  //一个线程对应一个ThreadLocalPtr::ThreadData对象，并且他们相互之间通过
+  //next和prev指针串起来，另外每个ThreadLocalPtr::ThreadData对象通过自己的inst指针指向全局唯一的
   ThreadData head_;
 
   std::unordered_map<uint32_t, UnrefHandler> handler_map_;
@@ -270,12 +278,19 @@ ThreadLocalPtr::StaticMeta* ThreadLocalPtr::Instance() {
   // destruction order even when the main thread dies before any child threads.
   // However, thread_local is not supported in all compilers that accept -std=c++11
   // (e.g., eg Mac with XCode < 8. XCode 8+ supports thread_local).
+
+  //静态的指针inst指向它，也就是说在Instane()第一次调用的时候会创建一个ThreadLocalPtr::StaticMeta对象，
+  //仅创建一次，以后再调用就直接返回已经赋值的inst指针即可，可以认为全局就一个ThreadLocalPtr::StaticMeta对象。
+  //ThreadLocalPtr::StaticMeta::StaticMeta
   static ThreadLocalPtr::StaticMeta* inst = new ThreadLocalPtr::StaticMeta();
   return inst;
 }
 
 port::Mutex* ThreadLocalPtr::StaticMeta::Mutex() { return &Instance()->mutex_; }
 
+//把自己的私有存储清空，将自己的ThreadLocalPtr::ThreadData对象tls从ThreadLocalPtr::StaticMeta
+//对象的head_中摘除，然后遍历tls中的entries的所有私有存储变量，通过id拿到用户注册的回调unref，
+//调用它来释放私有存储空间，最终删除tls
 void ThreadLocalPtr::StaticMeta::OnThreadExit(void* ptr) {
   auto* tls = static_cast<ThreadData*>(ptr);
   assert(tls != nullptr);
@@ -305,6 +320,7 @@ void ThreadLocalPtr::StaticMeta::OnThreadExit(void* ptr) {
   delete tls;
 }
 
+//ThreadLocalPtr::Instance
 ThreadLocalPtr::StaticMeta::StaticMeta()
   : next_instance_id_(0),
     head_(this),
@@ -365,16 +381,19 @@ void ThreadLocalPtr::StaticMeta::RemoveThreadData(
   d->next = d->prev = d;
 }
 
+//取出属于本线程对应的私有存储，即ThreadLocalPtr::ThreadData对象
 ThreadData* ThreadLocalPtr::StaticMeta::GetThreadLocal() {
 #ifndef ROCKSDB_SUPPORT_THREAD_LOCAL
   // Make this local variable name look like a member variable so that we
   // can share all the code below
-  ThreadData* tls_ =
+  ThreadData* tls_ = //通过pthread_getspecific()来取自己的私有存储，有就返回，没有就创建
       static_cast<ThreadData*>(pthread_getspecific(Instance()->pthread_key_));
 #endif
 
-  if (UNLIKELY(tls_ == nullptr)) {
+  if (UNLIKELY(tls_ == nullptr)) { //没有则创建
     auto* inst = Instance();
+	//创建一个新的ThreadLocalPtr::ThreadData对象，将它加到全局ThreadLocalPtr::StaticMeta对象的head_
+	//链表中，然后将这个ThreadLocalPtr::ThreadData对象通过pthread_setspecific()来存入自己的私有存储。
     tls_ = new ThreadData(inst);
     {
       // Register it in the global chain, needs to be done before thread exit
@@ -414,6 +433,8 @@ void ThreadLocalPtr::StaticMeta::Reset(uint32_t id, void* ptr) {
   tls->entries[id].ptr.store(ptr, std::memory_order_release);
 }
 
+//id是某个ThreadLocalPtr对象的id
+//ptr就是给私有空间赋的值的指针
 void* ThreadLocalPtr::StaticMeta::Swap(uint32_t id, void* ptr) {
   auto* tls = GetThreadLocal();
   if (UNLIKELY(id >= tls->entries.size())) {
@@ -466,6 +487,7 @@ uint32_t ThreadLocalPtr::TEST_PeekId() {
   return Instance()->PeekId();
 }
 
+//SetHandler想必就是将正在创建的ThreadLocalPtr对象的id与其回调函数建立映射，方便在将来销毁是反查执行
 void ThreadLocalPtr::StaticMeta::SetHandler(uint32_t id, UnrefHandler handler) {
   MutexLock l(Mutex());
   handler_map_[id] = handler;
@@ -480,6 +502,7 @@ UnrefHandler ThreadLocalPtr::StaticMeta::GetHandler(uint32_t id) {
   return iter->second;
 }
 
+//GetID会返回一个全局唯一的id
 uint32_t ThreadLocalPtr::StaticMeta::GetId() {
   MutexLock l(Mutex());
   if (free_instance_ids_.empty()) {
@@ -517,8 +540,9 @@ void ThreadLocalPtr::StaticMeta::ReclaimId(uint32_t id) {
 }
 
 ThreadLocalPtr::ThreadLocalPtr(UnrefHandler handler)
-    : id_(Instance()->GetId()) {
+    : id_(Instance()->GetId()) { //ThreadLocalPtr::Instance->ThreadLocalPtr::StaticMeta::GetId
   if (handler != nullptr) {
+  	//建立id_和handler的映射
     Instance()->SetHandler(id_, handler);
   }
 }

@@ -192,7 +192,7 @@ BlockBasedFilterBlockReader::BlockBasedFilterBlockReader(
   if (last_word > n - 5) return;
   data_ = contents_.data.data();
   offset_ = data_ + last_word; // 偏移数组开始指针
-  num_ = (n - 5 - last_word) // 计算出filter个数  
+  num_ = (n - 5 - last_word); // 计算出filter个数  
 }
 
 //查找函数传入两个参数，@block_offset是查找data block在sstable中的偏移，

@@ -41,6 +41,12 @@ extern Iterator* NewDBIterator(
 // a iterator hierarchy whose memory can be allocated inline. In that way,
 // accessing the iterator tree can be more cache friendly. It is also faster
 // to allocate.
+/*
+ArenaWrappedDBIter是暴露给用户的Iterator，它包含DBIter，DBIter则包含InternalIterator，
+InternalIterator顾名思义，是内部定义，MergeIterator、TwoLevelIterator、BlockIter、
+MemTableIter、LevelFileNumIterator等都是继承自InternalIterator
+图解参考http://kernelmaker.github.io/Rocksdb_Iterator
+*/
 class ArenaWrappedDBIter : public Iterator {
  public:
   virtual ~ArenaWrappedDBIter();

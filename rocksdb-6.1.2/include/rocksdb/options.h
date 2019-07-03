@@ -1210,6 +1210,7 @@ struct WriteOptions {
   // system call followed by "fdatasync()".
   //
   // Default: false
+  //是否需要同步
   bool sync;
 
   // If true, writes will not first go to the write ahead log,
@@ -1218,6 +1219,7 @@ struct WriteOptions {
   // you disable write-ahead logs, you must create backups with
   // flush_before_backup=true to avoid losing unflushed memtable data.
   // Default: false
+  //是否需要写事务日志
   bool disableWAL;
 
   // If true and if user is trying to write to column families that don't exist

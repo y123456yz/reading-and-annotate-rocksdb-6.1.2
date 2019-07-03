@@ -225,6 +225,12 @@ class Block {
   Block(const Block&) = delete;
   void operator=(const Block&) = delete;
 };
+/*
+ArenaWrappedDBIter是暴露给用户的Iterator，它包含DBIter，DBIter则包含InternalIterator，
+InternalIterator顾名思义，是内部定义，MergeIterator、TwoLevelIterator、BlockIter、
+MemTableIter、LevelFileNumIterator等都是继承自InternalIterator
+图解参考http://kernelmaker.github.io/Rocksdb_Iterator
+*/
 
 //DataBlockIter IndexBlockIter继承该类 
 //用以遍历Block内部数据

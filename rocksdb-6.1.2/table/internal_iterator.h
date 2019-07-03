@@ -17,6 +17,13 @@ namespace rocksdb {
 class PinnedIteratorsManager;
 
 //TwoLevelIndexIterator  BlockIter继承该类
+/*
+ArenaWrappedDBIter是暴露给用户的Iterator，它包含DBIter，DBIter则包含InternalIterator，
+InternalIterator顾名思义，是内部定义，MergeIterator、TwoLevelIterator、BlockIter、
+MemTableIter、LevelFileNumIterator等都是继承自InternalIterator
+图解参考http://kernelmaker.github.io/Rocksdb_Iterator
+*/
+//using InternalIterator = InternalIteratorBase<Slice>;
 template <class TValue>
 class InternalIteratorBase : public Cleanable {
  public:
