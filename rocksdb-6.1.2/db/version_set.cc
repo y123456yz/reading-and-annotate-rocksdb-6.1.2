@@ -2783,6 +2783,7 @@ struct VersionSet::ManifestWriter {
   InstrumentedCondVar cv;
   ColumnFamilyData* cfd;
   const MutableCFOptions mutable_cf_options;
+  //这个数组就是即将要写入到manifest-log文件( MANIFEST-000001)中的内容.
   const autovector<VersionEdit*>& edit_list;
 
   explicit ManifestWriter(InstrumentedMutex* mu, ColumnFamilyData* _cfd,
@@ -2869,6 +2870,7 @@ void VersionSet::AppendVersion(ColumnFamilyData* column_family_data,
   v->next_->prev_ = v;
 }
 
+//保存对应的数据到batch_edits中(manifest_writers_).
 Status VersionSet::ProcessManifestWrites(
     std::deque<ManifestWriter>& writers, InstrumentedMutex* mu,
     Directory* db_directory, bool new_descriptor_log,
@@ -3020,6 +3022,8 @@ Status VersionSet::ProcessManifestWrites(
   uint64_t new_manifest_file_size = 0;
   Status s;
 
+  //创建新的manifest-log(MANIFEST-000005)文件的逻辑.这里可以看到要么是第一次进入，
+  //要么文件大小大于option对应的值才会创建新的文件
   assert(pending_manifest_file_number_ == 0);
   if (!descriptor_log_ ||
       manifest_file_size_ > db_options_->max_manifest_file_size) {
@@ -3031,6 +3035,7 @@ Status VersionSet::ProcessManifestWrites(
     pending_manifest_file_number_ = manifest_file_number_;
   }
 
+  //如果需要创建新的manifest-log(MANIFEST-000005)文件，则开始构造对应的文件信息并创建文件.
   if (new_descriptor_log) {
     // if we are writing out new snapshot make sure to persist max column
     // family.
@@ -3095,6 +3100,9 @@ Status VersionSet::ProcessManifestWrites(
 #ifndef NDEBUG
       size_t idx = 0;
 #endif
+ 	  //开始写入对应的VersionEdit的record到文件(最后我们会来看这个record的构成),这里
+ 	  //看到写入完成后会调用Sync来刷新内容到磁盘,等这些操作都做完之后，则会更新Current
+ 	  //文件也就是更新最新的manifest-log(MANIFEST-000005)文件名到CURRENT文件中.
       for (auto& e : batch_edits) {
         std::string record;
         if (!e->EncodeTo(&record)) {
@@ -3153,6 +3161,7 @@ Status VersionSet::ProcessManifestWrites(
 
   // Append the old manifest file to the obsolete_manifest_ list to be deleted
   // by PurgeObsoleteFiles later.
+  //CURRENT文件更新完毕之后，就可以删除老的mainfest文件了.
   if (s.ok() && new_descriptor_log) {
     obsolete_manifests_.emplace_back(
         DescriptorFileName("", manifest_file_number_));
@@ -3235,6 +3244,7 @@ Status VersionSet::ProcessManifestWrites(
   pending_manifest_file_number_ = 0;
 
   // wake up all the waiting writers
+  //最后则是更新manifest_writers_队列，唤醒之前阻塞的内容.
   while (true) {
     ManifestWriter* ready = manifest_writers_.front();
     manifest_writers_.pop_front();
@@ -3262,6 +3272,7 @@ Status VersionSet::ProcessManifestWrites(
 
 // 'datas' is gramatically incorrect. We still use this notation to indicate
 // that this variable represents a collection of column_family_data.
+//创建MANIFEST-000005文件
 Status VersionSet::LogAndApply(
     const autovector<ColumnFamilyData*>& column_family_datas,
     const autovector<const MutableCFOptions*>& mutable_cf_options_list,
@@ -3296,9 +3307,13 @@ Status VersionSet::LogAndApply(
     assert(static_cast<size_t>(num_cfds) == mutable_cf_options_list.size());
     assert(static_cast<size_t>(num_cfds) == edit_lists.size());
   }
+
+  //每次LogAndApply的时候都会创建一个新的ManifesWriter加入到manifest_writers_队列中.
+  //这里只有当之前保存在队列中 的所有Writer都写入完毕之后才会加入到队列，否则就会等待.
   for (int i = 0; i < num_cfds; ++i) {
     writers.emplace_back(mu, column_family_datas[i],
                          *mutable_cf_options_list[i], edit_lists[i]);
+	//VersionSet::ProcessManifestWrites中唤醒
     manifest_writers_.push_back(&writers[i]);
   }
   assert(!writers.empty());

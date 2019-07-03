@@ -181,8 +181,11 @@ void DBImpl::FindObsoleteFiles(JobContext* job_context, bool force,
 
   // logs_ is empty when called during recovery, in which case there can't yet
   // be any tracked obsolete logs
-  //遍历所有的WAL，然后找出log_number小于当前min_log_number的
+  //遍历所有的WAL，然后找出log_number小于当前min_log_number的 
   //文件然后加入到对应的结构(log_delete_files).
+  //alive_log_files和logs_，他们的区别就是前一个表示有写入的WAL,而后一个
+  //则是包括了所有的WAL(比如open一个DB,而没有写入数据，此时也会生成WAL).
+  //真正的WAL清除在DBImpl::PurgeObsoleteFiles
   if (!alive_log_files_.empty() && !logs_.empty()) {
     uint64_t min_log_number = job_context->log_number;
     size_t num_alive_log_files = alive_log_files_.size();
@@ -298,6 +301,7 @@ void DBImpl::DeleteObsoleteFileImpl(int job_id, const std::string& fname,
 // belong to live files are possibly removed. Also, removes all the
 // files in sst_delete_files and log_delete_files.
 // It is not necessary to hold the mutex when invoking this method.
+//清除需要删除的WAL文件
 void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
   TEST_SYNC_POINT("DBImpl::PurgeObsoleteFiles:Begin");
   // we'd better have sth to delete

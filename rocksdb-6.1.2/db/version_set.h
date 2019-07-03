@@ -751,6 +751,8 @@ VersionSet 是所有Version的集合，管理着所有存活的Version。
 　VersionEdit 表示Version之间的变化，相当于delta 增量，表示有增加了多少文件，删除了文件。下图表示他们之间的关系。
 Version0 +VersionEdit-->Version1
 　VersionEdit会保存到MANIFEST文件中，当做数据恢复时就会从MANIFEST文件中读出来重建数据。
+
+MANIFEST可以参考http://mysql.taobao.org/monthly/2018/05/08/
 */
 class VersionSet {
  public:
@@ -1078,12 +1080,15 @@ class VersionSet {
   uint64_t prev_log_number_;  // 0 or backing store for memtable being compacted
 
   // Opened lazily
+  //当前manifest-log文件(MANIFEST-000005)
   std::unique_ptr<log::Writer> descriptor_log_;
 
   // generates a increasing version number for every new version
   uint64_t current_version_number_;
 
   // Queue of writers to the manifest file
+  //表示需要写入到manifest-log文件(MANIFEST-000005)中的内容.
+  //入队VersionSet::LogAndApply，VersionSet::ProcessManifestWrites中唤醒
   std::deque<ManifestWriter*> manifest_writers_;
 
   // Current size of manifest file

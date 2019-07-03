@@ -44,6 +44,7 @@ class InstrumentedMutex;
 class InstrumentedMutexLock;
 struct SuperVersionContext;
 
+//RocksDB · Column Family介绍:http://mysql.taobao.org/monthly/2018/06/09/
 extern const double kIncSlowdownRatio;
 
 // ColumnFamilyHandleImpl is the class that clients use to access different
@@ -491,6 +492,8 @@ class ColumnFamilyData {
 // * GetColumnFamily() -- either inside of DB mutex or from a write thread
 // * GetNextColumnFamilyID(), GetMaxColumnFamily(), UpdateMaxColumnFamily(),
 // NumberOfColumnFamilies -- inside of DB mutex
+//所有的Column Family都是通过一个叫做ColumnFamilySet的结构来管理的，
+//而每一个Column Family都是一个ColumnFamilyData.
 class ColumnFamilySet {
  public:
   // ColumnFamilySet supports iteration
@@ -514,6 +517,7 @@ class ColumnFamilySet {
     ColumnFamilyData* operator*() { return current_; }
 
    private:
+    //所有的Column Family都是通过一个叫做ColumnFamilySet的结构来管理的，而每一个Column Family都是一个ColumnFamilyData.
     ColumnFamilyData* current_;
   };
 

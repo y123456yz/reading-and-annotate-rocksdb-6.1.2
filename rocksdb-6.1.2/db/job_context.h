@@ -146,7 +146,8 @@ struct JobContext {
   std::vector<ObsoleteFileInfo> sst_delete_files;
 
   // a list of log files that we need to delete
-  //需要删除的wal文件  DBImpl::FindObsoleteFiles
+  //需要删除的wal文件 DBImpl::FindObsoleteFiles
+  //WAL真正删除在这里 DBImpl::PurgeObsoleteFiles
   std::vector<uint64_t> log_delete_files;
 
   // a list of log files that we need to preserve during full purge since they

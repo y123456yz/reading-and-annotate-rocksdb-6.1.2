@@ -1328,6 +1328,8 @@ class DBImpl : public DB {
   //  the write_thread_ without using mutex
   //  - it follows that the items with getting_synced=true can be safely read
   //  from the same thread that has set getting_synced=true
+  //alive_log_files和logs_，他们的区别就是前一个表示有写入的WAL,而后一
+  //个则是包括了所有的WAL(比如open一个DB,而没有写入数据，此时也会生成WAL).
   std::deque<LogWriterNumber> logs_;
   // Signaled when getting_synced becomes false for some of the logs_.
   InstrumentedCondVar log_sync_cv_;

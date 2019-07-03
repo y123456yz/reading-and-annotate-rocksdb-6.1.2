@@ -77,7 +77,8 @@ MemTable::MemTable(const InternalKeyComparator& cmp,
                  ? &mem_tracker_
                  : nullptr,
              mutable_cf_options.memtable_huge_page_size),
-      //实际上是跳跃表
+      //实际上是跳跃表 RocksDB有多种MemTable的实现，那么它是如何来做的呢，RocksDB通过memtable_factory
+      //来根据用户的设置来创建不同的memtable.这里要注意的是核心的memtable实现是在MemTable这个类的table_域中.
       table_(ioptions.memtable_factory->CreateMemTableRep(
           comparator_, &arena_, mutable_cf_options.prefix_extractor.get(),
           ioptions.info_log, column_family_id)),
@@ -491,6 +492,11 @@ bool MemTable::Add(SequenceNumber s, ValueType type,
       type == kTypeRangeDeletion ? range_del_table_ : table_;
   KeyHandle handle = table->Allocate(encoded_len, &buf);
 
+  //那就是skiplist里面只有key,而RocksDB是一个ＫＶ存储，那么这个KV是如何存储的呢，
+  //这里是这样的，RocksDB会将KV打包成一个key传递给SkipList, 对应的KEY的结构是这样的
+  //如果要解析这里的封装的KV包，则在在SkipList(以跳跃表为例，实际上可能还有hashLIST等)的Comparator中
+  //实现的(compare_)，见InlineSkipList<Comparator>::Insert
+  
   //buf内容格式:keylen | key | type | valuelen | value
   
   //keylen | key

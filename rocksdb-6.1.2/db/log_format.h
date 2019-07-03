@@ -24,6 +24,7 @@ namespace rocksdb {
 //    DBImpl::SwitchMemtable->NewWritableFile
 //WAL的文件格式都是类似0000001.LOG这样子
 //WAL清理操作在DBImpl::FindObsoleteFiles
+//查看WAL文件内容: ../../bin/ldb dump_wal --walfile=./000285.log --header
 namespace log {
 
 //rocksdb把日志文件切分成了大小为32KB的连续block块，block由连续的log record组成，log record的格式为：

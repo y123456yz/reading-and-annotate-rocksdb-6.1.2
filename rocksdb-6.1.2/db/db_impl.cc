@@ -1661,6 +1661,8 @@ std::vector<Status> DBImpl::MultiGet(
   return stat_list;
 }
 
+//创建CF，通过handle返回
+//CreateColumnFamily和DropColumnFamily对应
 Status DBImpl::CreateColumnFamily(const ColumnFamilyOptions& cf_options,
                                   const std::string& column_family,
                                   ColumnFamilyHandle** handle) {

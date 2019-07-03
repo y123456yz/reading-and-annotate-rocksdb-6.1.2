@@ -280,6 +280,7 @@ class MemTableRep {
 
 // This is the base class for all factories that are used by RocksDB to create
 // new MemTableRep objects
+//HashLinkListRepFactory HashSkipListRepFactory等继承该类
 class MemTableRepFactory {
  public:
   virtual ~MemTableRepFactory() {}
@@ -287,10 +288,14 @@ class MemTableRepFactory {
   virtual MemTableRep* CreateMemTableRep(const MemTableRep::KeyComparator&,
                                          Allocator*, const SliceTransform*,
                                          Logger* logger) = 0;
+  
   virtual MemTableRep* CreateMemTableRep(
       const MemTableRep::KeyComparator& key_cmp, Allocator* allocator,
       const SliceTransform* slice_transform, Logger* logger,
       uint32_t /* column_family_id */) {
+    //最后会调用对应的实现的CreateMemTableRep方法，这里我们就来看
+    //SkipList的实现．MemTableRep* SkipListFactory::CreateMemTableRep
+    //此外还有HashLinkList  HashSkipList等，参考对应的CreateMemTableRep
     return CreateMemTableRep(key_cmp, allocator, slice_transform, logger);
   }
 

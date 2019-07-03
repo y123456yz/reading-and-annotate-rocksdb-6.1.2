@@ -115,6 +115,8 @@ current:
 
 //在rocksdb中所有KV数据都是存储在Memtable，Immutable Memtable和SSTable中
 //LRUCache针对sstable文件的查找，memtable针对Memtable和Immutable Memtable
+//Memtable的创建(ColumnFamilyData::CreateNewMemtable)是在创建ColumnFamily(VersionSet::CreateColumnFamily)的时候创建的
+//MemTable的写入逻辑见http://mysql.taobao.org/monthly/2018/08/08/
 class MemTable {
  public:
   struct KeyComparator : public MemTableRep::KeyComparator {
@@ -458,6 +460,8 @@ class MemTable {
   ConcurrentArena arena_;
 
   //实际上是跳跃表  可以是hash_linklist  hash_skiplist等
+  //RocksDB有多种MemTable的实现，那么它是如何来做的呢，RocksDB通过memtable_factory来
+  //根据用户的设置来创建不同的memtable.这里要注意的是核心的memtable实现是在MemTable这个类的table_域中.
   std::unique_ptr<MemTableRep> table_;
   std::unique_ptr<MemTableRep> range_del_table_;
   std::atomic_bool is_range_del_table_empty_;

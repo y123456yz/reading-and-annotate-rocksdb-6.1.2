@@ -202,6 +202,7 @@ VersionSet 是所有Version的集合，管理着所有存活的Version。
 Version0 +VersionEdit-->Version1
 　VersionEdit会保存到MANIFEST文件中，当做数据恢复时就会从MANIFEST文件中读出来重建数据。
 */
+//ManifestWriter.edit_list包含了一个VersionEdit的数组
 class VersionEdit {
  public:
   VersionEdit() { Clear(); }
