@@ -39,7 +39,7 @@ class WriteThread {
     // (-> STATE_COMPLETED), or when a leader that has chosen to perform
     // updates in parallel and needs this Writer to apply its batch (->
     // STATE_PARALLEL_FOLLOWER).
-    STATE_INIT = 1,
+    STATE_INIT = 1, //write的初始状态
 
     // The state used to inform a waiting Writer that it has become the
     // leader, and it should now build a write batch group.  Tricky:
@@ -49,29 +49,29 @@ class WriteThread {
     // a terminal state unless the leader chooses to make this a parallel
     // batch, in which case the last parallel worker to finish will move
     // the leader to STATE_COMPLETED.
-    STATE_GROUP_LEADER = 2,
+    STATE_GROUP_LEADER = 2, //被选为leader
 
     // The state used to inform a waiting writer that it has become the
     // leader of memtable writer group. The leader will either write
     // memtable for the whole group, or launch a parallel group write
     // to memtable by calling LaunchParallelMemTableWrite.
-    STATE_MEMTABLE_WRITER_LEADER = 4,
+    STATE_MEMTABLE_WRITER_LEADER = 4,//负责串行地将所有follower写入memtable的leader
 
     // The state used to inform a waiting writer that it has become a
     // parallel memtable writer. It can be the group leader who launch the
     // parallel writer group, or one of the followers. The writer should then
     // apply its batch to the memtable concurrently and call
     // CompleteParallelMemTableWriter.
-    STATE_PARALLEL_MEMTABLE_WRITER = 8,
+    STATE_PARALLEL_MEMTABLE_WRITER = 8,//并发写memtable的follower
 
     // A follower whose writes have been applied, or a parallel leader
     // whose followers have all finished their work.  This is a terminal
     // state.
-    STATE_COMPLETED = 16,
+    STATE_COMPLETED = 16, //Group Commit完成
 
     // A state indicating that the thread may be waiting using StateMutex()
     // and StateCondVar()
-    STATE_LOCKED_WAITING = 32,
+    STATE_LOCKED_WAITING = 32, //write等待自己状态变化
   };
 
   struct Writer;
@@ -81,9 +81,9 @@ class WriteThread {
     //当写线程要提交事务时会将自己对应的Write实例添加到Write链表的尾部。
     //此时存在一种特殊情况，即当前待提交的线程是加入Write链表的第一个线程。
     //在RocksDB的逻辑中，第一个加入链表的线程将成为leader线程。
-    Writer* leader = nullptr;
+    Writer* leader = nullptr; //该WriteGroup的第一个Writer
     //WriteGroup中的最后一个Writer
-    Writer* last_writer = nullptr;
+    Writer* last_writer = nullptr; 
     SequenceNumber last_sequence;
     // before running goes to zero, status needs leader->StateMutex()
     Status status;
@@ -152,8 +152,9 @@ class WriteThread {
     WriteThread::CreateMissingNewerLinks
     */
     //可以参考WriteThread::LinkOne  
+    //指向老的writer
     Writer* link_older;  // read/write only before linking, or as leader
-    //相当于next指针，指向最新的writer
+    //指向最新的writer  WriteThread::LinkOne
     Writer* link_newer;  // lazy, read/write only before linking, or as leader
 
     Writer()

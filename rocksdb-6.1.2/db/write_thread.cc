@@ -260,6 +260,7 @@ void WriteThread::SetState(Writer* w, uint8_t new_state) {
 
 
 //WriteThread::JoinBatchGroup
+//把新的w和newest_writer通过链表链接在一起
 bool WriteThread::LinkOne(Writer* w, std::atomic<Writer*>* newest_writer) {
   assert(newest_writer != nullptr);
   assert(w->state == STATE_INIT);
@@ -294,7 +295,7 @@ bool WriteThread::LinkOne(Writer* w, std::atomic<Writer*>* newest_writer) {
     w->link_older = writers;
 	//newest_writer指向新的w
     if (newest_writer->compare_exchange_weak(writers, w)) {
-      return (writers == nullptr);
+      return (writers == nullptr); //说明w是第一个进来的，可以作为leader
     }
   }
 }
@@ -417,9 +418,11 @@ void WriteThread::JoinBatchGroup(Writer* w) {
   TEST_SYNC_POINT_CALLBACK("WriteThread::JoinBatchGroup:Start", w);
   assert(w->batch != nullptr);
 
+  //把新的w和newest_writer通过链表链接在一起
   bool linked_as_leader = LinkOne(w, &newest_writer_);
 
   if (linked_as_leader) {
+  	//w设置为leader
     SetState(w, STATE_GROUP_LEADER);
   }
 
@@ -594,6 +597,8 @@ void WriteThread::EnterAsMemTableWriter(Writer* leader,
       last_writer->sequence + WriteBatchInternal::Count(last_writer->batch) - 1;
 }
 
+//当当前group的所有Writer都写入MemTable之后，则将会调用ExitAsMemTableWriter来进行收尾工作.
+//如果有新的memtable writer list需要处理，那么则唤醒对应的Writer,然后设置已经处理完毕的Writer的状态.
 void WriteThread::ExitAsMemTableWriter(Writer* /*self*/,
                                        WriteGroup& write_group) {
   Writer* leader = write_group.leader;
@@ -626,6 +631,7 @@ void WriteThread::ExitAsMemTableWriter(Writer* /*self*/,
   SetState(leader, STATE_COMPLETED);
 }
 
+//leader线程将通过调用LaunchParallelMemTableWriter函数通知所有的follower线程并发写memtable。
 void WriteThread::LaunchParallelMemTableWriters(WriteGroup* write_group) {
   assert(write_group != nullptr);
   write_group->running.store(write_group->size);
@@ -636,6 +642,11 @@ void WriteThread::LaunchParallelMemTableWriters(WriteGroup* write_group) {
 
 static WriteThread::AdaptationContext cpmtw_ctx("CompleteParallelMemTableWriter");
 // This method is called by both the leader and parallel followers
+//待所有的线程（不管leader线程或者follower线程）写完memtable，都会调用
+//CompleteParallelMemTableWriter判断自己是否是最后一个完成写memtable的线程，
+//如果不是最后一个则等待被通知；如果是最后一个是follower线程，通过调用
+//ExitAsBatchGroupFollower函数，调用ExitAsBatchGroupLeader通知所有follower可以退出，
+//并且通知leader线程。如果最后一个完成的是leader线程，则可以直接调用ExitAsBatchGroupLeader函数。
 bool WriteThread::CompleteParallelMemTableWriter(Writer* w) {
 
   auto* write_group = w->write_group;
@@ -666,6 +677,21 @@ void WriteThread::ExitAsBatchGroupFollower(Writer* w) {
 }
 
 static WriteThread::AdaptationContext eabgl_ctx("ExitAsBatchGroupLeader");
+//CompleteParallelMemTableWriter判断自己是否是最后一个完成写memtable的线程，
+//如果不是最后一个则等待被通知；如果是最后一个是follower线程，通过调用
+//ExitAsBatchGroupFollower函数，调用ExitAsBatchGroupLeader通知所有follower可以退出，
+//并且通知leader线程。如果最后一个完成的是leader线程，则可以直接调用ExitAsBatchGroupLeader函数。
+
+
+//当当前的leader将它自己与它的follow写入之后，此时它将需要写入memtable,那么此时之前
+//还阻塞的Writer，分为两种情况 第一种是已经被当前的leader打包写入到WAL，这些writer
+//(包括leader自己)需要将他们链接到memtable writer list.还有一种情况，那就是还没有写入WAL的，
+//此时这类writer则需要选择一个leader然后继续写入WAL.
+
+//ExitAsBatchGroupLeader函数除了通知follower线程提交已经完成，还有另一个作用。
+//在这一轮Group Commit进行过程中，writer链表可能新添加了许多待提交的事务。
+//当退出本次Group Commit之前，如果writer链表上有新的待提交的事务，将它设置成leader。
+//这个成为leader的线程将被唤醒，重复leader线程进行Group Commit的逻辑。
 void WriteThread::ExitAsBatchGroupLeader(WriteGroup& write_group,
                                          Status status) {
   Writer* leader = write_group.leader;

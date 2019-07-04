@@ -447,11 +447,11 @@ Status DBImpl::PipelinedWriteImpl(const WriteOptions& write_options,
     mutex_.Unlock();
 
     // This can set non-OK status if callback fail.
-    //当当前的Writer对象为leader的话，则将会把此leader下的所有的write都 链接到一
+    //当当前的Writer对象为leader的话，则将会把此leader下的所有的write都链接到一
     //个WriteGroup中(调用EnterAsBatchGroupLeader函数),　并开始写入WAL,这里要注意
     //非leader的write将会直接 进入memtable的写入，这是因为非leader的write都将会被
     //当前它所从属的leader来打包(group)写入
-    last_batch_group_size_ =
+    last_batch_group_size_ = //返回该group所属下面所有writer的内容长度
         write_thread_.EnterAsBatchGroupLeader(&w, &wal_write_group);
     const SequenceNumber current_sequence =
         write_thread_.UpdateLastSequence(versions_->LastSequence()) + 1;
@@ -496,6 +496,7 @@ Status DBImpl::PipelinedWriteImpl(const WriteOptions& write_options,
                           wal_write_group.size - 1);
         RecordTick(stats_, WRITE_DONE_BY_OTHER, wal_write_group.size - 1);
       }
+	  //进入写WAL操作,最终会把这个write_group打包成一个writeBatch(通过MergeBatch函数)进行写入.
       w.status = WriteToWAL(wal_write_group, log_writer, log_used,
                             need_log_sync, need_log_dir_sync, current_sequence);
     }
@@ -532,6 +533,8 @@ Status DBImpl::PipelinedWriteImpl(const WriteOptions& write_options,
     }
   }
 
+  //开始执行写入MemTable的操作，之前在写入WAL的时候被阻塞的所有Writer此时都会进入
+  //下面这个逻辑，此时也就意味着 并发写入MemTable．
   if (w.state == WriteThread::STATE_PARALLEL_MEMTABLE_WRITER) {
     assert(w.ShouldWriteToMemtable());
     ColumnFamilyMemTablesImpl column_family_memtables(
@@ -862,6 +865,7 @@ Status DBImpl::WriteToWAL(const WriteBatch& merged_batch,
   return status;
 }
 
+//进入写WAL操作,最终会把这个write_group打包成一个writeBatch(通过MergeBatch函数)进行写入.
 Status DBImpl::WriteToWAL(const WriteThread::WriteGroup& write_group,
                           log::Writer* log_writer, uint64_t* log_used,
                           bool need_log_sync, bool need_log_dir_sync,
