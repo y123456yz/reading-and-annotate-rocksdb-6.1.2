@@ -114,6 +114,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
                             log_ref, seq_used, batch_cnt, pre_release_callback);
   }
 
+  //如果使能enable_pipelined_write则走这个分支
   if (immutable_db_options_.enable_pipelined_write) {
     return PipelinedWriteImpl(write_options, my_batch, callback, log_used,
                               log_ref, disable_memtable, seq_used);
@@ -415,6 +416,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
   return status;
 }
 
+//可以参考http://mysql.taobao.org/monthly/2018/07/04/
 Status DBImpl::PipelinedWriteImpl(const WriteOptions& write_options,
                                   WriteBatch* my_batch, WriteCallback* callback,
                                   uint64_t* log_used, uint64_t log_ref,
@@ -426,6 +428,8 @@ Status DBImpl::PipelinedWriteImpl(const WriteOptions& write_options,
 
   WriteThread::Writer w(write_options, my_batch, callback, log_ref,
                         disable_memtable);
+  //每一个DB(DBImpl)都有一个write_thread_
+  //新建一个WriteThread::Writer对象，并将这个对象加入到一个Group中(调用JoinBatchGroup)
   write_thread_.JoinBatchGroup(&w);
   if (w.state == WriteThread::STATE_GROUP_LEADER) {
     WriteThread::WriteGroup wal_write_group;
@@ -443,6 +447,10 @@ Status DBImpl::PipelinedWriteImpl(const WriteOptions& write_options,
     mutex_.Unlock();
 
     // This can set non-OK status if callback fail.
+    //当当前的Writer对象为leader的话，则将会把此leader下的所有的write都 链接到一
+    //个WriteGroup中(调用EnterAsBatchGroupLeader函数),　并开始写入WAL,这里要注意
+    //非leader的write将会直接 进入memtable的写入，这是因为非leader的write都将会被
+    //当前它所从属的leader来打包(group)写入
     last_batch_group_size_ =
         write_thread_.EnterAsBatchGroupLeader(&w, &wal_write_group);
     const SequenceNumber current_sequence =
@@ -1596,6 +1604,7 @@ Status DB::Put(const WriteOptions& opt, ColumnFamilyHandle* column_family,
   // 8 bytes are taken by header, 4 bytes for count, 1 byte for type,
   // and we allocate 11 extra bytes for key length, as well as value length.
   WriteBatch batch(key.size() + value.size() + 24);//设置Batch
+  //WriteBatch::put
   Status s = batch.Put(column_family, key, value);
   if (!s.ok()) {
     return s;

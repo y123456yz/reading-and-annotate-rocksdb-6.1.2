@@ -32,6 +32,7 @@ class ThreadPool {
   virtual int GetBackgroundThreads() = 0;
 
   // Get the number of jobs scheduled in the ThreadPool queue.
+  //
   virtual unsigned int GetQueueLen() const = 0;
 
   // Waits for all jobs to complete those

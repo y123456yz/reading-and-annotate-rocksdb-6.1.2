@@ -1731,6 +1731,8 @@ Status DBImpl::CreateColumnFamilies(
   return s;
 }
 
+//首先就是通过调用GetNextColumnFamilyID来得到当前创建的ColumnFamily对应的ID(自增).
+//然后再调用LogAndApply来对ColumnFamily 进行对应的操作.最后再返回封装好的ColumnFamilyHandle给调用者.
 Status DBImpl::CreateColumnFamilyImpl(const ColumnFamilyOptions& cf_options,
                                       const std::string& column_family_name,
                                       ColumnFamilyHandle** handle) {
@@ -1779,6 +1781,7 @@ Status DBImpl::CreateColumnFamilyImpl(const ColumnFamilyOptions& cf_options,
       write_thread_.EnterUnbatched(&w, &mutex_);
       // LogAndApply will both write the creation in MANIFEST and create
       // ColumnFamilyData object
+      //最终会在LogAndApply->ProcessManifestWrites调用ColumnFamilySet的CreateColumnFamily函数(通过VersionSet::CreateColumnFamily)
       s = versions_->LogAndApply(nullptr, MutableCFOptions(cf_options), &edit,
                                  &mutex_, directories_.GetDbDir(), false,
                                  &cf_options);

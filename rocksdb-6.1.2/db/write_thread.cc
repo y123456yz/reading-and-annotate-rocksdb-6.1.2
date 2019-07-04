@@ -258,9 +258,13 @@ void WriteThread::SetState(Writer* w, uint8_t new_state) {
   }
 }
 
+
+//WriteThread::JoinBatchGroup
 bool WriteThread::LinkOne(Writer* w, std::atomic<Writer*>* newest_writer) {
   assert(newest_writer != nullptr);
   assert(w->state == STATE_INIT);
+  //主要用来将当前的Writer对象加入到group中，这里可以看到由于 
+  //写入是并发的因此对应的newest_writer_(保存最新的写入对象)需要原子操作来更新.
   Writer* writers = newest_writer->load(std::memory_order_relaxed);
   while (true) {
     // If write stall in effect, and w->no_slowdown is not true,
@@ -285,7 +289,10 @@ bool WriteThread::LinkOne(Writer* w, std::atomic<Writer*>* newest_writer) {
         }
       }
     }
+
+	//通过link_older让w和newest_writer建立关联，链接在一起
     w->link_older = writers;
+	//newest_writer指向新的w
     if (newest_writer->compare_exchange_weak(writers, w)) {
       return (writers == nullptr);
     }
@@ -317,6 +324,8 @@ bool WriteThread::LinkGroup(WriteGroup& write_group,
   }
 }
 
+////找到当前链表中最新的Write实例newestwriter，通过调用CreateMissingNewerLinks(newest_writer)，
+//将整个链表的链接成一个双向链表。
 void WriteThread::CreateMissingNewerLinks(Writer* head) {
   while (true) {
     Writer* next = head->link_older;
@@ -400,7 +409,10 @@ void WriteThread::EndWriteStall() {
   stall_cv_.SignalAll();
 }
 
+//DBImpl::PipelinedWriteImpl
 static WriteThread::AdaptationContext jbg_ctx("JoinBatchGroup");
+//这个函数主要是用来将所有的写入WAL加入到一个Group中.这里可以看到当当前的Writer 
+//对象是leader(比如第一个进入的对象)的时候将会直接返回，否则将会等待知道更新为对应的状态．
 void WriteThread::JoinBatchGroup(Writer* w) {
   TEST_SYNC_POINT_CALLBACK("WriteThread::JoinBatchGroup:Start", w);
   assert(w->batch != nullptr);
@@ -412,7 +424,7 @@ void WriteThread::JoinBatchGroup(Writer* w) {
   }
 
   TEST_SYNC_POINT_CALLBACK("WriteThread::JoinBatchGroup:Wait", w);
-
+  //如果是leader，直接返回
   if (!linked_as_leader) {
     /**
      * Wait util:
@@ -428,6 +440,7 @@ void WriteThread::JoinBatchGroup(Writer* w) {
      *      writes in parallel.
      */
     TEST_SYNC_POINT_CALLBACK("WriteThread::JoinBatchGroup:BeganWaiting", w);
+	//等待
     AwaitState(w, STATE_GROUP_LEADER | STATE_MEMTABLE_WRITER_LEADER |
                       STATE_PARALLEL_MEMTABLE_WRITER | STATE_COMPLETED,
                &jbg_ctx);
@@ -435,6 +448,9 @@ void WriteThread::JoinBatchGroup(Writer* w) {
   }
 }
 
+//DBImpl::PipelinedWriteImpl
+//把此leader下的所有的write都链接到一个WriteGroup中(调用EnterAsBatchGroupLeader函数),　并开始写入WAL
+//由leader线程构造一个WriteGroup对象的实例，WriteGroup对象的实例用于描述当作Group Commit要写入WAL的所有内容。
 size_t WriteThread::EnterAsBatchGroupLeader(Writer* leader,
                                             WriteGroup* write_group) {
   assert(leader->link_older == nullptr);
@@ -446,6 +462,8 @@ size_t WriteThread::EnterAsBatchGroupLeader(Writer* leader,
   // Allow the group to grow up to a maximum size, but if the
   // original write is small, limit the growth so we do not slow
   // down the small write too much.
+  //确定本批次要提交的最大长度max_size。如果leader线程要写入WAL的记录长度大于128k，
+  //则本次max_size为1MB；如果leader的记录长度小于128k, 则max_size为leader的记录长度+128k。
   size_t max_size = 1 << 20;
   if (size <= (128 << 10)) {
     max_size = size + (128 << 10);
@@ -462,10 +480,15 @@ size_t WriteThread::EnterAsBatchGroupLeader(Writer* leader,
   // (they emptied the list and then we added ourself as leader) or had to
   // explicitly wake us up (the list was non-empty when we added ourself,
   // so we have already received our MarkJoined).
+  //找到当前链表中最新的Write实例newestwriter，通过调用CreateMissingNewerLinks(newest_writer)，
+  //将整个链表的链接成一个双向链表。
   CreateMissingNewerLinks(newest_writer);
 
   // Tricky. Iteration start (leader) is exclusive and finish
   // (newest_writer) is inclusive. Iteration goes from old to new.
+  //从leader所在的Write开始遍历，直至newestwrite。累加每个writer的size，
+  //超过max_size就提前截断；另外地，也检查writer的一些flag，与leaer不
+  //一致也提前截断。将符合的最后的一个write记录到WriteGroup::last_write中。
   Writer* w = leader;
   while (w != newest_writer) {
     w = w->link_newer;

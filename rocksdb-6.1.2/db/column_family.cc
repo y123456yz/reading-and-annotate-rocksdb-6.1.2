@@ -1278,6 +1278,10 @@ size_t ColumnFamilySet::NumberOfColumnFamilies() const {
 }
 
 // under a DB mutex AND write thread
+//1 创建ColumnFamilyData对象
+//2 将新的创建好的CFD加入到双向链表
+//3 对应的Map数据结构更新数据
+//VersionSet::CreateColumnFamily
 ColumnFamilyData* ColumnFamilySet::CreateColumnFamily(
     const std::string& name, uint32_t id, Version* dummy_versions,
     const ColumnFamilyOptions& options) {
@@ -1315,6 +1319,11 @@ void ColumnFamilySet::FreeDeadColumnFamilies() {
 }
 
 // under a DB mutex AND from a write thread
+//ColumnFamilySet::CreateColumnFamily和ColumnFamilySet::RemoveColumnFamily对应
+//这个函数是是从两个Map中删除对应的ColumnFamily. 这里或许我们要问了，
+//为什么管理的双向链表不需要删除呢。
+// 这里原因是这样的，由于ColumnFamilyData是通过引用计数管理的，因此只有当所有
+// 的引用计数都清零之后， 才需要真正的函数ColumnFamilyData(也就是会从双向链表中删除数据).
 void ColumnFamilySet::RemoveColumnFamily(ColumnFamilyData* cfd) {
   auto cfd_iter = column_family_data_.find(cfd->GetID());
   assert(cfd_iter != column_family_data_.end());

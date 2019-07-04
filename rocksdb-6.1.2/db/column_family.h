@@ -45,6 +45,7 @@ class InstrumentedMutexLock;
 struct SuperVersionContext;
 
 //RocksDB · Column Family介绍:http://mysql.taobao.org/monthly/2018/06/09/
+//图解参考 https://blog.csdn.net/flyqwang/article/details/50096377
 extern const double kIncSlowdownRatio;
 
 // ColumnFamilyHandleImpl is the class that clients use to access different
@@ -157,6 +158,8 @@ class ColumnFamilySet;
 
 // This class keeps all the data that a column family needs.
 // Most methods require DB mutex held, unless otherwise noted
+//每一个Column Family都是一个ColumnFamilyData.
+//ColumnFamilySet.dummy_cfd_ //ColumnFamilyHandleImpl.cfd_
 class ColumnFamilyData {
  public:
   ~ColumnFamilyData();
@@ -398,6 +401,7 @@ class ColumnFamilyData {
 
   uint32_t id_;
   const std::string name_;
+  //当前ColumnFamily对应的所有的version(dummy_versions_).
   Version* dummy_versions_;  // Head of circular doubly-linked list of versions.
   Version* current_;         // == dummy_versions->prev_
 
@@ -437,6 +441,7 @@ class ColumnFamilyData {
   // pointers for a circular linked list. we use it to support iterations over
   // all column families that are alive (note: dropped column families can also
   // be alive as long as client holds a reference)
+  //用链表来管理 ColumnFamilySet中用来表示所有ColumnFamily的双向链表.
   ColumnFamilyData* next_;
   ColumnFamilyData* prev_;
 
@@ -567,10 +572,15 @@ class ColumnFamilySet {
   // * when reading, at least one condition needs to be satisfied:
   // 1. DB mutex locked
   // 2. accessed from a single-threaded write thread
+  //map用来保存Column Family名字和对应的id以及ColumnFamilyData的映射
+  ////ColumnFamilySet::CreateColumnFamily和ColumnFamilySet::RemoveColumnFamily对应添加和删除
   std::unordered_map<std::string, uint32_t> column_families_;
   std::unordered_map<uint32_t, ColumnFamilyData*> column_family_data_;
 
+  //RocksDB内部是将每一个ColumnFamily的名字表示为一个uint32类型的ID(max_column_family_).
+  //也就是这个ID是一个简单的递增的数值.
   uint32_t max_column_family_;
+  //实际上是双向链表结构，所有的ColumnFamilyData通过这里连接在一起
   ColumnFamilyData* dummy_cfd_;
   // We don't hold the refcount here, since default column family always exists
   // We are also not responsible for cleaning up default_cfd_cache_. This is

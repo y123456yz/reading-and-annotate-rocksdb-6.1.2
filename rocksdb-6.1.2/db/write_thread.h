@@ -26,8 +26,10 @@
 
 namespace rocksdb {
 
+//DBImpl.write_thread_
 class WriteThread {
  public:
+  //状态转换图可以参考https://cloud.tencent.com/developer/article/1143439
   enum State : uint8_t {
     // The initial state of a writer.  This is a Writer that is
     // waiting in JoinBatchGroup.  This state can be left when another
@@ -74,8 +76,13 @@ class WriteThread {
 
   struct Writer;
 
+  //WriteThread::EnterAsBatchGroupLeader中使用
   struct WriteGroup {
+    //当写线程要提交事务时会将自己对应的Write实例添加到Write链表的尾部。
+    //此时存在一种特殊情况，即当前待提交的线程是加入Write链表的第一个线程。
+    //在RocksDB的逻辑中，第一个加入链表的线程将成为leader线程。
     Writer* leader = nullptr;
+    //WriteGroup中的最后一个Writer
     Writer* last_writer = nullptr;
     SequenceNumber last_sequence;
     // before running goes to zero, status needs leader->StateMutex()
@@ -112,7 +119,10 @@ class WriteThread {
   };
 
   // Information kept for every waiting writer.
+  //参考https://cloud.tencent.com/developer/article/1143439
+  //DBImpl::PipelinedWriteImpl
   struct Writer {
+    //每个写线程都会生成一个WriteThread::Write的实例，关联到对应的一个WriteBatch。
     WriteBatch* batch;
     bool sync;
     bool no_slowdown;
@@ -125,6 +135,7 @@ class WriteThread {
     WriteCallback* callback;
     bool made_waitable;          // records lazy construction of mutex and cv
     std::atomic<uint8_t> state;  // write under StateMutex() or pre-link
+    //赋值见WriteThread::EnterAsBatchGroupLeader
     WriteGroup* write_group;
     SequenceNumber sequence;  // the sequence number to use for the first key
     Status status;
@@ -132,7 +143,17 @@ class WriteThread {
 
     std::aligned_storage<sizeof(std::mutex)>::type state_mutex_bytes;
     std::aligned_storage<sizeof(std::condition_variable)>::type state_cv_bytes;
+
+    /*
+      一个链表的结构，待提交的事务可以通过JoinBatchGroup(&w)函数将本WriteBatch对
+    应的Write实例加到Write链表中。自然地，Write链表中的一个元素代表着一个待提
+    交的写线程。写到WAL文件中的内容有先后顺序，这里也只需要按照链表中的先后顺
+    序写入即可。多个Write对象的实例同样合并成一个写WAL操作，由一个线程负责进行fsync即可。
+    WriteThread::CreateMissingNewerLinks
+    */
+    //可以参考WriteThread::LinkOne  
     Writer* link_older;  // read/write only before linking, or as leader
+    //相当于next指针，指向最新的writer
     Writer* link_newer;  // lazy, read/write only before linking, or as leader
 
     Writer()
@@ -362,6 +383,8 @@ class WriteThread {
 
   // Points to the newest pending writer. Only leader can remove
   // elements, adding can be done lock-free by anybody.
+  //WriteThread::JoinBatchGroup中赋值，表示最新的writer  
+  //也就是writer链表头，参考WriteThread::CreateMissingNewerLinks
   std::atomic<Writer*> newest_writer_;
 
   // Points to the newest pending memtable writer. Used only when pipelined

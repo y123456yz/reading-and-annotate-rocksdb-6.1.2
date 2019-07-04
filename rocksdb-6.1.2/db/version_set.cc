@@ -3272,7 +3272,7 @@ Status VersionSet::ProcessManifestWrites(
 
 // 'datas' is gramatically incorrect. We still use this notation to indicate
 // that this variable represents a collection of column_family_data.
-//创建MANIFEST-000005文件
+//创建MANIFEST-000005文件 
 Status VersionSet::LogAndApply(
     const autovector<ColumnFamilyData*>& column_family_datas,
     const autovector<const MutableCFOptions*>& mutable_cf_options_list,
@@ -3677,6 +3677,8 @@ Status VersionSet::Recover(
           TEST_SYNC_POINT_CALLBACK("VersionSet::Recover:LastInAtomicGroup",
                                    &edit);
           for (auto& e : replay_buffer) {
+		  	//将磁盘上读取的ColumnFamily的信息初始化(初始化ColumnFamilySet结构)
+		  	//可以参考http://mysql.taobao.org/monthly/2018/06/09/
             s = ApplyOneVersionEditToBuilder(
                 e, cf_name_to_options, column_families_not_found, builders,
                 &have_log_number, &log_number, &have_prev_log_number,
@@ -4604,7 +4606,7 @@ void VersionSet::GetObsoleteFiles(std::vector<ObsoleteFileInfo>* files,
   obsolete_files_.swap(pending_files);
 }
 
-ColumnFamilyData* VersionSet::CreateColumnFamily(
+ColumnFamilyData* VersionSet::CreateColumnFamily( 
     const ColumnFamilyOptions& cf_options, VersionEdit* edit) {
   assert(edit->is_column_family_add_);
 
@@ -4614,6 +4616,7 @@ ColumnFamilyData* VersionSet::CreateColumnFamily(
   // Ref() dummy version once so that later we can call Unref() to delete it
   // by avoiding calling "delete" explicitly (~Version is private)
   dummy_versions->Ref();
+  //ColumnFamilySet::CreateColumnFamily
   auto new_cfd = column_family_set_->CreateColumnFamily(
       edit->column_family_name_, edit->column_family_, dummy_versions,
       cf_options);

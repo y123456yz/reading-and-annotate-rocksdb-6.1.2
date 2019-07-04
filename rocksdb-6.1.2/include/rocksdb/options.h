@@ -854,6 +854,9 @@ struct DBOptions {
   // write throughput and reduce latency of the prepare phase of two-phase
   // commit.
   //
+  //选项的目的就是将WAL和MemTable的写入pipeline化， 也就是说当一个线程写完毕WAL之后，
+  //此时在WAL的write队列中等待的其他的write则会开始继续写入WAL, 而当前线程将会继续 
+  //写入MemTable.此时就将不同的Writer的写入WAL和写入MemTable并发执行了.
   // Default: false
   bool enable_pipelined_write = false;
 
@@ -865,6 +868,8 @@ struct DBOptions {
   // if you are going to use this feature.
   //
   // Default: true
+  //在设置allow_concurrent_memtable_write时，由leader线程通知所有follower线程并发
+  //写入memtable；否则，由leader线程串行将所有follower线程的操作写入memtable中。
   bool allow_concurrent_memtable_write = true;
 
   // If true, threads synchronizing with the write batch group leader will

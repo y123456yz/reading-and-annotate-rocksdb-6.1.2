@@ -1384,7 +1384,7 @@ class DBImpl : public DB {
 
   WriteBufferManager* write_buffer_manager_;
 
-  //²Î¿¼DBImpl::WriteImpl
+  //²Î¿¼DBImpl::WriteImpl  
   WriteThread write_thread_;
   WriteBatch tmp_batch_;
   // The write thread when the writers have no memtable write. This will be used

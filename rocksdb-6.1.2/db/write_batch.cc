@@ -623,6 +623,7 @@ size_t WriteBatchInternal::GetFirstOffset(WriteBatch* /*b*/) {
   return WriteBatchInternal::kHeader;
 }
 
+//WriteBatch::Put
 Status WriteBatchInternal::Put(WriteBatch* b, uint32_t column_family_id,
                                const Slice& key, const Slice& value) {
   if (key.size() > size_t{port::kMaxUint32}) {
@@ -648,6 +649,7 @@ Status WriteBatchInternal::Put(WriteBatch* b, uint32_t column_family_id,
   return save.commit();
 }
 
+//DB::Put
 Status WriteBatch::Put(ColumnFamilyHandle* column_family, const Slice& key,
                        const Slice& value) {
   return WriteBatchInternal::Put(this, GetColumnFamilyID(column_family), key,

@@ -57,6 +57,15 @@ struct SavePoint {
   bool is_cleared() const { return (size | count | content_flags) == 0; }
 };
 
+/*
+RocksDB的写入过程分成以下三步：
+1.将一条或者多条操作的记录封装到WriteBatch
+2.将记录对应的日志写到WAL文件中
+3.将WriteBatch中的一条或者多条记录写到内存中的memtable中
+
+  其中，每个WriteBatch代表一个事务，可以包含多条操作，可以通过调用WriteBatch::Put/Delete等操作
+将对应多条的key/value记录加入WriteBatch中。
+*/
 class WriteBatch : public WriteBatchBase {
  public:
   explicit WriteBatch(size_t reserved_bytes = 0, size_t max_bytes = 0);

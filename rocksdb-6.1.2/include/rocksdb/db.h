@@ -69,6 +69,7 @@ struct ColumnFamilyDescriptor {
       : name(_name), options(_options) {}
 };
 
+//ColumnFamilyHandleImpl继承该类
 class ColumnFamilyHandle {
  public:
   virtual ~ColumnFamilyHandle() {}
@@ -125,7 +126,7 @@ typedef std::unordered_map<std::string, std::shared_ptr<const TableProperties>>
 // A DB is safe for concurrent access from multiple threads without
 // any external synchronization.
 
-//DBImpl继承该类
+//DBImpl 继承该类
 class DB {
  public:
   // Open the database with the specified "name".
