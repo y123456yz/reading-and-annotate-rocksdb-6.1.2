@@ -145,6 +145,7 @@ size_t MemTable::ApproximateMemoryUsage() {
   return total_usage;
 }
 
+//这个函数主要的判断就是判断是否当前MemTable的内存使用是否超过了write_buffer_size，如果超过了，那么就返回true.
 bool MemTable::ShouldFlushNow() const {
   size_t write_buffer_size = write_buffer_size_.load(std::memory_order_relaxed);
   // In a lot of times, we cannot allocate arena blocks that exactly matches the
@@ -203,11 +204,18 @@ bool MemTable::ShouldFlushNow() const {
   return arena_.AllocatedAndUnused() < kArenaBlockSize / 4;
 }
 
+//等到后面某个时间段再调用flush线程来刷新内容到磁盘.
+//在这种情况下，每一个memtable都会有一个状态叫做flush_state_,
+//而每个memtable都有可能有三种状态.而状态的更新是通过UpdateFlushState
+//来进行的.这里可以推测的到这些都是对于单个memtable的限制.
+
+//UpdateFlushState什么时候会被调用呢，就是当你每次操作memtable的时候，比如update/add这些操作.
 void MemTable::UpdateFlushState() {
   auto state = flush_state_.load(std::memory_order_relaxed);
   if (state == FLUSH_NOT_REQUESTED && ShouldFlushNow()) {
     // ignore CAS failure, because that means somebody else requested
     // a flush
+    //当shoudflushnow之后，将会设置flush_state_状态为FLUSH_REQUESTED,也就是此memtable将会被flush.
     flush_state_.compare_exchange_strong(state, FLUSH_REQUESTED,
                                          std::memory_order_relaxed,
                                          std::memory_order_relaxed);

@@ -33,6 +33,9 @@ class WriteBufferManager {
   bool cost_to_cache() const { return cache_rep_ != nullptr; }
 
   // Only valid if enabled()
+  //然后我们来看mutable_memtable_memory_usage和memory_usage，这两个函数用来
+  //返回整体的write_buffer所使用的内存(memory_used_)以及将要被释放的内存(memory_active_),
+  //比如一个memory table被标记为immutable,则表示这块内存将要被释放.
   size_t memory_usage() const {
     return memory_used_.load(std::memory_order_relaxed);
   }
@@ -42,6 +45,7 @@ class WriteBufferManager {
   size_t buffer_size() const { return buffer_size_; }
 
   // Should only be called from write thread
+  //判断memtable所使用的内存是否已经超过限制.
   bool ShouldFlush() const {
     if (enabled()) {
       if (mutable_memtable_memory_usage() > mutable_limit_) {
@@ -84,6 +88,7 @@ class WriteBufferManager {
   }
 
  private:
+  //mutable_limit_和buffer_size_的初始化在这里,这里buffer_size_就是db_write_buffer_size这个可配置的选项.
   const size_t buffer_size_;
   const size_t mutable_limit_;
   std::atomic<size_t> memory_used_;

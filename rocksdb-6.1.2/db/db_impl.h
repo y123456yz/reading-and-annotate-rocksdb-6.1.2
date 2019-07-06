@@ -1451,6 +1451,8 @@ class DBImpl : public DB {
   // in MaybeScheduleFlushOrCompaction()
   // invariant(column family present in flush_queue_ <==>
   // ColumnFamilyData::pending_flush_ == true)
+  //这个队列将会保存所有的将要被flush到磁盘的ColumnFamily.只有当当前的ColumnFamily满
+  //足flush条件（cfd->imm()->IsFlushPending()）才会将此CF加入到flush队列．
   std::deque<FlushRequest> flush_queue_;
   // invariant(column family present in compaction_queue_ <==>
   // ColumnFamilyData::pending_compaction_ == true)

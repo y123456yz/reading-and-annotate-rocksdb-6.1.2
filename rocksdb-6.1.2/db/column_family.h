@@ -461,6 +461,8 @@ class ColumnFamilyData {
   std::unique_ptr<WriteControllerToken> write_controller_token_;
 
   // If true --> this ColumnFamily is currently present in DBImpl::flush_queue_
+  //这个队列将会保存所有的将要被flush到磁盘的ColumnFamily.只有当当前的ColumnFamily
+  //满足flush条件（cfd->imm()->IsFlushPending()）才会将此CF加入到flush队列．
   bool queued_for_flush_;
 
   // If true --> this ColumnFamily is currently present in

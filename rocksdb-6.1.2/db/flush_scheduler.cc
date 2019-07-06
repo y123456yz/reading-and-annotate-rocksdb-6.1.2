@@ -11,6 +11,7 @@
 
 namespace rocksdb {
 
+//ScheduleFlush则是比较重要的一个函数，就是用来将对应的CF加入到flush调度队列(FlushScheduler).
 void FlushScheduler::ScheduleFlush(ColumnFamilyData* cfd) {
 #ifndef NDEBUG
   std::lock_guard<std::mutex> lock(checking_mutex_);

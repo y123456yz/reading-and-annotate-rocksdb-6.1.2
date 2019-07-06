@@ -446,6 +446,8 @@ struct DBOptions {
   // Default: 0
   //
   // Dynamically changeable through SetDBOptions() API.
+  //当WAL文件的大小超过max_total_wal_size之后 最后一个条件的原因是，当WAL文件大小太大之后，
+  //我们需要清理WAL,因此此时我们需要将此WAL对应的数据都刷新到磁盘，也是刷新Memtable.
   uint64_t max_total_wal_size = 0;
 
   // If non-null, then we should collect metrics about database operations

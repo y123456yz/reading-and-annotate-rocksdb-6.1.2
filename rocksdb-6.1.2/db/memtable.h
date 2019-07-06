@@ -173,6 +173,7 @@ class MemTable {
 
   // This method heuristically determines if the memtable should continue to
   // host more data.
+  //这个函数用来返回当前的memtable是否已经被设置flush_requested状态位。
   bool ShouldScheduleFlush() const {
     return flush_state_.load(std::memory_order_relaxed) == FLUSH_REQUESTED;
   }
@@ -472,6 +473,7 @@ class MemTable {
   std::atomic<uint64_t> num_deletes_;
 
   // Dynamically changeable memtable option
+  //表示每个columnfamily的memtable的大小限制
   std::atomic<size_t> write_buffer_size_;
 
   // These are used to manage memtable flushes to storage

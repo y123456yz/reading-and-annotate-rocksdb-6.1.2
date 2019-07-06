@@ -38,7 +38,7 @@ struct ImmutableCFOptions {
   const CompactionFilter* compaction_filter;
 
   CompactionFilterFactory* compaction_filter_factory;
-
+  //表示最小的可以被flush的memtable的个数
   int min_write_buffer_number_to_merge;
 
   int max_write_buffer_number_to_maintain;
@@ -214,6 +214,7 @@ struct MutableCFOptions {
 
   // Memtable related options
   size_t write_buffer_size;
+  //最大的memtable的个数
   int max_write_buffer_number;
   size_t arena_block_size;
   double memtable_prefix_bloom_size_ratio;

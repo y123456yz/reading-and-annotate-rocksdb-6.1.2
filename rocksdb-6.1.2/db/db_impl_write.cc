@@ -716,6 +716,7 @@ void DBImpl::MemTableInsertStatusCheck(const Status& status) {
   }
 }
 
+//这个函数的调用是在是在写WAL之前，也就是每次写WAL都会进行这个判断.
 Status DBImpl::PreprocessWrite(const WriteOptions& write_options,
                                bool* need_log_sync,
                                WriteContext* write_context) {
@@ -736,6 +737,8 @@ Status DBImpl::PreprocessWrite(const WriteOptions& write_options,
     status = SwitchWAL(write_context);
   }
 
+  //调用write_buffer的shouldflush来判断是否处理bufferfull.而这个函数很简单，
+  //就是判断memtable所使用的内存是否已经超过限制.
   if (UNLIKELY(status.ok() && write_buffer_manager_->ShouldFlush())) {
     // Before a new memtable is added in SwitchMemtable(),
     // write_buffer_manager_->ShouldFlush() will keep returning true. If another
@@ -745,6 +748,8 @@ Status DBImpl::PreprocessWrite(const WriteOptions& write_options,
     status = HandleWriteBufferFull(write_context);
   }
 
+  //每次写WAL之前都会调用PreprocessWrite,然后这个函数会判断flush_scheduler是否为
+  //空(也就是是否有已经满掉的memtable需要刷新到磁盘).
   if (UNLIKELY(status.ok() && !flush_scheduler_.Empty())) {
     status = ScheduleFlushes(write_context);
   }
@@ -1053,6 +1058,8 @@ void DBImpl::AssignAtomicFlushSeq(const autovector<ColumnFamilyData*>& cfds) {
   }
 }
 
+//断是否WAL的大小是否已经超过了设置的wal大小(max_total_wal_size).可以看到它的调用也是在每次写WAL之前.
+//DBImpl::PreprocessWrite
 Status DBImpl::SwitchWAL(WriteContext* write_context) {
   mutex_.AssertHeld();
   assert(write_context != nullptr);
@@ -1138,6 +1145,10 @@ Status DBImpl::SwitchWAL(WriteContext* write_context) {
   return status;
 }
 
+/*
+这个函数主要是处理所有ColumnFamily的memtable内存超过限制的情况．
+可以看到它会调用SwitchMemtable然后再将对应的cfd加入到flush_queue_,最后再来调用后台刷新线程.
+*/
 Status DBImpl::HandleWriteBufferFull(WriteContext* write_context) {
   mutex_.AssertHeld();
   assert(write_context != nullptr);
@@ -1323,6 +1334,8 @@ Status DBImpl::ThrottleLowPriWritesIfNeeded(const WriteOptions& write_options,
   return Status::OK();
 }
 
+//遍历之前所有的需要被flush的memtable，然后调用switchMemtable来进行后续操作.
+//这里要注意在SwitchMemtable也会触发调用flush线程.
 Status DBImpl::ScheduleFlushes(WriteContext* context) {
   autovector<ColumnFamilyData*> cfds;
   if (immutable_db_options_.atomic_flush) {
@@ -1380,6 +1393,18 @@ void DBImpl::NotifyOnMemTableSealed(ColumnFamilyData* /*cfd*/,
 
 // REQUIRES: mutex_ is held
 // REQUIRES: this thread is currently at the front of the writer queue
+//这个函数用来将现在的memtable改变为immutable,然后再新建一个memtable,也
+//就是说理论上来说每一次内存的memtable被刷新到磁盘之前肯定会调用这个函数．
+//而在实现中，每一次调用SwitchMemtable之后，都会调用对应immutable　memtable
+//的FlushRequested函数来设置对应memtable的flush_requeseted_, 并且会调用上面
+//的SchedulePendingFlush来将对应的ColumnFamily加入到flush_queue_队列中．因此
+//这里我们就通过这几个函数的调用栈来分析RocksDB中何时会触发flush操作.
+
+//在RocksDB中会有四个地方会调用SwitchMemtable,分别是:
+//DbImpl::HandleWriteBufferFull
+//DBImpl::SwitchWAL
+//DBImpl::FlushMemTable
+//DBImpl::ScheduleFlushes
 Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
   mutex_.AssertHeld();
   WriteThread::Writer nonmem_w;

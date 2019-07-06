@@ -129,6 +129,7 @@ Status DBImpl::SyncClosedLogs(JobContext* job_context) {
   return s;
 }
 
+//FlushMemTableToOutputFile来刷新Memtable到磁盘
 Status DBImpl::FlushMemTableToOutputFile(
     ColumnFamilyData* cfd, const MutableCFOptions& mutable_cf_options,
     bool* made_progress, JobContext* job_context,
@@ -1476,6 +1477,8 @@ void DBImpl::GenerateFlushRequest(const autovector<ColumnFamilyData*>& cfds,
   }
 }
 
+//这个函数用来强制刷新刷新memtable到磁盘，比如用户直接调用Flush接口.
+//switchmemtable->flushrequested->maybescheduleflushorcompaction.
 Status DBImpl::FlushMemTable(ColumnFamilyData* cfd,
                              const FlushOptions& flush_options,
                              FlushReason flush_reason, bool writes_stopped) {
@@ -1924,6 +1927,7 @@ ColumnFamilyData* DBImpl::PickCompactionFromQueue(
   return cfd;
 }
 
+//将对应的ColumnFamily加入到flush queue中.
 void DBImpl::SchedulePendingFlush(const FlushRequest& flush_req,
                                   FlushReason flush_reason) {
   if (flush_req.empty()) {
@@ -2010,6 +2014,9 @@ void DBImpl::UnscheduleFlushCallback(void* arg) {
   TEST_SYNC_POINT("DBImpl::UnscheduleFlushCallback");
 }
 
+//刷新MemTable到磁盘是一个后台线程来做的，这个后台线程叫做BGWorkFlush，最终这个
+//函数会调用BackgroundFlush函数，而BackgroundFlush主要功能是在flush_queue_中找到
+//一个ColumnFamily然后刷新它的memtable到磁盘.
 Status DBImpl::BackgroundFlush(bool* made_progress, JobContext* job_context,
                                LogBuffer* log_buffer, FlushReason* reason,
                                Env::Priority thread_pri) {

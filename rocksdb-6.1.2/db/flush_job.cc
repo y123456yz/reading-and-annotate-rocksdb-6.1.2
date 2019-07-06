@@ -194,6 +194,8 @@ void FlushJob::PickMemTable() {
   base_->Ref();  // it is likely that we do not need this reference
 }
 
+//在RocksDB中刷新是通过FlushJob这个类来实现的,整个实现还是比较简单.最终这里是调用WriteLevel0Table来刷新内容到磁盘。
+//格式参考https://github.com/facebook/rocksdb/wiki/Rocksdb-BlockBasedTable-Format
 Status FlushJob::Run(LogsWithPrepTracker* prep_tracker,
                      FileMetaData* file_meta) {
   TEST_SYNC_POINT("FlushJob::Start");

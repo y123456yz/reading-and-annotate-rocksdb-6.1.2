@@ -51,6 +51,7 @@ struct ImmutableDBOptions {
   bool allow_fallocate;
   bool is_fd_close_on_exec;
   bool advise_random_on_open;
+  //db_write_buffer_size 总的memtable的大小限制(所有的ColumnFamily).
   size_t db_write_buffer_size;
   std::shared_ptr<WriteBufferManager> write_buffer_manager;
   DBOptions::AccessHint access_hint_on_compaction_start;
