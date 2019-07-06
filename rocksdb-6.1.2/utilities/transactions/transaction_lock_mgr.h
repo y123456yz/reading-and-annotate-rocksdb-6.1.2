@@ -104,6 +104,7 @@ class TransactionLockMgr {
 
   // Map of ColumnFamilyId to locked key info
   using LockMaps = std::unordered_map<uint32_t, std::shared_ptr<LockMap>>;
+  //每个column family 存储一个这样的LockMap。
   LockMaps lock_maps_;
 
   // Thread-local cache of entries in lock_maps_.  This is an optimization
@@ -116,6 +117,9 @@ class TransactionLockMgr {
   // Maps from waitee -> number of waiters.
   HashMap<TransactionID, int> rev_wait_txn_map_;
   // Maps from waiter -> waitee.
+  //rocksdb内部实现了简单的死锁检测机制，每次加锁发生等待时都会向下面的map中
+  //插入一条等待信息，表示一个事务id等待另一个事务id。 同时会检查wait_txn_map_
+  //是否存在等待环路，存在环路则发生死锁。
   HashMap<TransactionID, TrackedTrxInfo> wait_txn_map_;
   DeadlockInfoBuffer dlock_buffer_;
 

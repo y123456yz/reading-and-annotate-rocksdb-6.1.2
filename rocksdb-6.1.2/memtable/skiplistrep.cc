@@ -10,6 +10,8 @@
 
 namespace rocksdb {
 namespace {
+//SkipListFactory::CreateMemTableRep
+//memtable采用跳跃表的情况
 class SkipListRep : public MemTableRep {
   InlineSkipList<const MemTableRep::KeyComparator&> skip_list_;
   const MemTableRep::KeyComparator& cmp_;

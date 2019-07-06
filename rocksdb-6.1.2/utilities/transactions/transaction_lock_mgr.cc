@@ -31,6 +31,7 @@
 
 namespace rocksdb {
 
+//每个锁实际上存储的哪条记录被哪个事务锁住。
 struct LockInfo {
   bool exclusive;
   autovector<TransactionID> txn_ids;
@@ -48,6 +49,7 @@ struct LockInfo {
         expiration_time(lock_info.expiration_time) {}
 };
 
+//每个锁实际是key和LockInfo的映射。 锁信息都保存在map中
 struct LockMapStripe {
   explicit LockMapStripe(std::shared_ptr<TransactionDBMutexFactory> factory) {
     stripe_mutex = factory->AllocateMutex();
@@ -68,6 +70,7 @@ struct LockMapStripe {
 };
 
 // Map of #num_stripes LockMapStripes
+//为了减少全局锁信息访问的冲突， rocksdb将锁信息进行按key hash分区，
 struct LockMap {
   explicit LockMap(size_t num_stripes,
                    std::shared_ptr<TransactionDBMutexFactory> factory)
@@ -440,6 +443,7 @@ void TransactionLockMgr::DecrementWaitersImpl(
   }
 }
 
+//死锁检测
 bool TransactionLockMgr::IncrementWaiters(
     const PessimisticTransaction* txn,
     const autovector<TransactionID>& wait_ids, const std::string& key,

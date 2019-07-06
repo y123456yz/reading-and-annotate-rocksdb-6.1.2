@@ -430,6 +430,8 @@ inline bool DBIter::FindNextUserEntry(bool skipping, bool prefix_check) {
 }
 
 // Actual implementation of DBIter::FindNextUserEntry()
+//每次查询用户记录时，并不需要加锁。而是根据当前的sequence number Sn创建
+//一个snapshot, 查询过程中只取小于或等于Sn的最大sequence number的记录。查询结束时释放snapshot。
 bool DBIter::FindNextUserEntryInternal(bool skipping, bool prefix_check) {
   // Loop until we hit an acceptable entry to yield
   assert(iter_->Valid());

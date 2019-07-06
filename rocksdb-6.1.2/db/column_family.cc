@@ -903,6 +903,7 @@ MemTable* ColumnFamilyData::ConstructNewMemtable(
                       write_buffer_manager_, earliest_seq, id_);
 }
 
+//创建memtable,然后设置到ColumnFamilyData的mem_域中．
 void ColumnFamilyData::CreateNewMemtable(
     const MutableCFOptions& mutable_cf_options, SequenceNumber earliest_seq) {
   if (mem_ != nullptr) {

@@ -111,9 +111,10 @@ struct ParsedInternalKey {
   Slice user_key;
   //快照seq可以参考https://leveldb-handbook.readthedocs.io/zh/latest/rwopt.html#id8
   //internalKey的seq字段使用的便是快照对应的seq
-  //序列号：leveldb中，每一次写操作都有一个sequence number，标志着写入操作的先后顺序。
-  //由于在leveldb中，可能会有多条相同key的数据项同时存储在数据库中，因此需要有一个序列
+  //序列号：rocksdb中，每一次写操作都有一个sequence number，标志着写入操作的先后顺序。
+  //由于在rocksdb中，可能会有多条相同key的数据项同时存储在数据库中，因此需要有一个序列
   //号来标识这些数据项的新旧情况。序列号最大的数据项为最新值；
+  //同时sequence number是实现事务处理的关键，同时也是MVCC的基础。
   SequenceNumber sequence;
   //类型：标志本条数据项的类型，为更新还是删除；
   ValueType type;

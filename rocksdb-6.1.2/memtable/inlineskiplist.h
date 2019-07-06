@@ -648,6 +648,7 @@ bool InlineSkipList<Comparator>::Insert(const char* key) {
   return Insert<false>(key, seq_splice_, false);
 }
 
+//MemTable::Add
 template <class Comparator>
 bool InlineSkipList<Comparator>::InsertConcurrently(const char* key) {
   Node* prev[kMaxPossibleHeight];

@@ -39,6 +39,7 @@ struct TransactionDBOptions {
   // If the number of locked keys is greater than max_num_locks, transaction
   // writes (or GetForUpdate) will return an error.
   // If this value is not positive, no limit will be enforced.
+  //事务锁个数限制 通过设置 expiration max_num_locks两个参数，来控制事务锁占用过多的内存。
   int64_t max_num_locks = -1;
 
   // Stores the number of latest deadlocks to track
@@ -113,6 +114,7 @@ struct TransactionOptions {
   // Setting to true means that before acquiring locks, this transaction will
   // check if doing so will cause a deadlock. If so, it will return with
   // Status::Busy.  The user should retry their transaction.
+  //是否开启死锁检测
   bool deadlock_detect = false;
 
   // If set, it states that the CommitTimeWriteBatch represents the latest state
@@ -139,9 +141,11 @@ struct TransactionOptions {
   // a forgotten transaction that is never committed, rolled back, or deleted
   // will never relinquish any locks it holds.  This could prevent keys from
   // being written by other writers.
+  //事务过期时间  通过设置 expiration max_num_locks两个参数，来控制事务锁占用过多的内存。
   int64_t expiration = -1;
 
   // The number of traversals to make during deadlock detection.
+  //死锁检查深度，默认50
   int64_t deadlock_detect_depth = 50;
 
   // The maximum number of bytes used for the write batch. 0 means no limit.

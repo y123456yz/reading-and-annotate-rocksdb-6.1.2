@@ -32,11 +32,13 @@ class SnapshotImpl : public Snapshot {
   friend class SnapshotList;
 
   // SnapshotImpl is kept in a doubly-linked circular list
+  //snapshot由全局双向链表管理，根据sequence number排序。
+  //snapshot的创建和删除都需要维护双向链表。
   SnapshotImpl* prev_;
   SnapshotImpl* next_;
 
   SnapshotList* list_;                 // just for sanity checks
-
+  // snapshot创建时间
   int64_t unix_time_;
 
   // Will this snapshot be used by a Transaction to do write-conflict checking?

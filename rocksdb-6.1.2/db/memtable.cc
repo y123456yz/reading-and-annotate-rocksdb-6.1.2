@@ -498,6 +498,7 @@ bool MemTable::Add(SequenceNumber s, ValueType type,
   //实现的(compare_)，见InlineSkipList<Comparator>::Insert
   
   //buf内容格式:keylen | key | type | valuelen | value
+  //也就是填充handle
   
   //keylen | key
   char* p = EncodeVarint32(buf, internal_key_size);
@@ -565,6 +566,8 @@ bool MemTable::Add(SequenceNumber s, ValueType type,
     assert(post_process_info == nullptr);
     UpdateFlushState();
   } else {
+    //插入到对应hash-list或者skiplist中
+    //跳跃表对应InlineSkipList<>::InsertConcurrently
     bool res = table->InsertKeyConcurrently(handle);
     if (UNLIKELY(!res)) {
       return res;
