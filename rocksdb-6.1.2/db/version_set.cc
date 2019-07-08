@@ -105,6 +105,10 @@ Status OverlapWithIterator(const Comparator* ucmp,
 // levels. Therefore we are guaranteed that if we find data
 // in a smaller level, later levels are irrelevant (unless we
 // are MergeInProgress).
+//GetContext结构，这个类只要是根据传递进来的文件元信息来查找对应的key.
+//FilePicker,这个类主要是根据传递进来的key来选择对应的文件
+//FilePicker,这个类主要是根据传递进来的key来选择对应的文件
+//参考Version::Get
 class FilePicker {
  public:
   FilePicker(std::vector<FileMetaData*>* files, const Slice& user_key,
@@ -147,6 +151,11 @@ class FilePicker {
 
   int GetCurrentLevel() const { return curr_level_; }
 
+  //这个函数他会遍历所有的level,然后再遍历每个level的所有的文件,这里会对level 0的文
+  //件做一个特殊处理，这是因为只有level0的sst的range不是有序的，因此我们每次查找需
+  //要查找所有的文件，也就是会一个个的遍历.
+
+  //在非level0,我们只需要按照二分查找来得到对应的文件即可,如果二分查找不存在，那么我就需要进入下一个level进行查找.
   FdWithKeyRange* GetNextFile() {
     while (!search_ended_) {  // Loops over different levels.
       while (curr_index_in_curr_level_ < curr_file_level_->num_files) {
@@ -1197,7 +1206,8 @@ Version::Version(ColumnFamilyData* column_family_data, VersionSet* vset,
       mutable_cf_options_(mutable_cf_options),
       version_number_(version_number) {}
 
-//查找函数，直接在DBImpl::Get()中被调用
+//查找函数，直接在DBImpl::Get()中被调用  sst中查找
+//memtable查找MemTable::Get  SST文件中查找Version::Get
 void Version::Get(const ReadOptions& read_options, const LookupKey& k,
                   PinnableSlice* value, Status* status,
                   MergeContext* merge_context,
@@ -1230,6 +1240,11 @@ void Version::Get(const ReadOptions& read_options, const LookupKey& k,
       storage_info_.files_, user_key, ikey, &storage_info_.level_files_brief_,
       storage_info_.num_non_empty_levels_, &storage_info_.file_indexer_,
       user_comparator(), internal_comparator());
+  //这个函数他会遍历所有的level,然后再遍历每个level的所有的文件,这里会对level 0的
+  //文件做一个特殊处理，这是因为只有level0的sst的range不是有序的，因此我们每次查找
+  //需要查找所有的文件，也就是会一个个的遍历.
+
+  //在非level0,我们只需要按照二分查找来得到对应的文件即可,如果二分查找不存在，那么我就需要进入下一个level进行查找.
   FdWithKeyRange* f = fp.GetNextFile();
 
   while (f != nullptr) {
@@ -1246,6 +1261,8 @@ void Version::Get(const ReadOptions& read_options, const LookupKey& k,
         GetPerfLevel() >= PerfLevel::kEnableTimeExceptForMutex &&
         get_perf_context()->per_level_perf_context_enabled;
     StopWatchNano timer(env_, timer_enabled /* auto_start */);
+
+	//TableCache::Get,
     *status = table_cache_->Get(
         read_options, *internal_comparator(), *f->file_metadata, ikey,
         &get_context, mutable_cf_options_.prefix_extractor.get(),
@@ -1300,6 +1317,7 @@ void Version::Get(const ReadOptions& read_options, const LookupKey& k,
             "rocksdb::blob_db::BlobDB instead.");
         return;
     }
+	//如果没有发现对应的值则进入下一次文件查找
     f = fp.GetNextFile();
   }
 

@@ -90,6 +90,7 @@ class ColumnFamilyHandleInternal : public ColumnFamilyHandleImpl {
 };
 
 // holds references to memtable, all immutable memtables and version
+//²Î¿¼DBImpl::GetImpl
 struct SuperVersion {
   // Accessing members of this class is not thread-safe and requires external
   // synchronization (ie db mutex held or on write thread).

@@ -302,6 +302,9 @@ InternalIterator* TableCache::NewIterator(
   return result;
 }
 
+//Version::Get
+//这个函数不仅仅是返回对应的查找结果，并且还会cache相应的文件信息，并且
+//如果row_cache打开，他还会做row cache.这里row cache就是对当前的所需要查找的key在当前sst中对应的value进行cache.
 Status TableCache::Get(const ReadOptions& options,
                        const InternalKeyComparator& internal_comparator,
                        const FileMetaData& file_meta, const Slice& k,
@@ -318,6 +321,8 @@ Status TableCache::Get(const ReadOptions& options,
 
   // Check row cache if enabled. Since row cache does not currently store
   // sequence numbers, we cannot use it if we need to fetch the sequence.
+  //打开了row cache,RocksDB将会如何处理,首先它会计算row cache的key.通过下面的
+  //代码我们可以看到row cache的key就是fd_number+seq_no+user_key.
   if (ioptions_.row_cache && !get_context->NeedToReadSequence()) {
     uint64_t fd_number = fd.GetNumber();
     auto user_key = ExtractUserKey(k);

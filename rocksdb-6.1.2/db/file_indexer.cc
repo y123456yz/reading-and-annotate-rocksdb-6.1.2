@@ -27,6 +27,7 @@ size_t FileIndexer::LevelIndexSize(size_t level) const {
   return next_level_index_[level].num_index;
 }
 
+//计算下一个level需要二分查找的文件范围:
 void FileIndexer::GetNextLevelIndex(const size_t level, const size_t file_index,
                                     const int cmp_smallest,
                                     const int cmp_largest, int32_t* left_bound,

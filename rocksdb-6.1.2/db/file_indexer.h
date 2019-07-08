@@ -67,6 +67,7 @@ class FileIndexer {
   size_t num_levels_;
   const Comparator* ucmp_;
 
+  //参考http://mysql.taobao.org/monthly/2018/12/08/  用于sst二分查找
   struct IndexUnit {
     IndexUnit()
       : smallest_lb(0), largest_lb(0), smallest_rb(-1), largest_rb(-1) {}

@@ -789,7 +789,9 @@ static bool SaveValue(void* arg, const char* entry) {
 // 如果这个key中的有删除标识,存放一个NotFound()错误到*status参数中，返回值为true。
 // 否则返回值为false
 
-//memtable查找参考http://mysql.taobao.org/monthly/2018/11/05/
+//DBImpl::GetImpl
+//memtable查找MemTable::Get  SST文件中查找Version::Get
+//参考http://mysql.taobao.org/monthly/2018/11/05/
 bool MemTable::Get(const LookupKey& key, std::string* value, Status* s,
                    MergeContext* merge_context,
                    SequenceNumber* max_covering_tombstone_seq,

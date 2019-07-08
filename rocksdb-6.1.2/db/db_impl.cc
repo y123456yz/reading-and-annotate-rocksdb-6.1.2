@@ -1458,6 +1458,8 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
   //memtable中没找到，则从sst文件查找. 参考http://mysql.taobao.org/monthly/2018/12/08/
   if (!done) {
     PERF_TIMER_GUARD(get_from_output_files_time);
+	//直接从当前的version(sv->current)调用Get方法
+	//Version::Get
     sv->current->Get(read_options, lkey, pinnable_val, &s, &merge_context,
                      &max_covering_tombstone_seq, value_found, nullptr, nullptr,
                      callback, is_blob_index);
