@@ -617,6 +617,7 @@ bool MemTable::Add(SequenceNumber s, ValueType type,
 // Callback from MemTable::Get()
 namespace {
 
+//MemTable::Get中构造
 struct Saver {
   Status* status;
   const LookupKey* key;
@@ -645,6 +646,10 @@ struct Saver {
 };
 }  // namespace
 
+//(SaveValue)函数,这个函数有两个参数，第一个参数是之前保存的Saver对象，第二个
+//则就是我们在SkipListRep::iterator::seek->InlineSkipList<>::Iterator::Seek中定
+//位到的位置.这个函数要做的比较简单，首先就是判断是否得到的key和我们传递进来的key相同，
+//如果不同，则说明查找的key不合法，因此直接返回.这里我们着重来看对于插入和删除的处理.
 static bool SaveValue(void* arg, const char* entry) {
   Saver* s = reinterpret_cast<Saver*>(arg);
   assert(s != nullptr);
@@ -700,6 +705,8 @@ static bool SaveValue(void* arg, const char* entry) {
           return false;
         }
         FALLTHROUGH_INTENDED;
+
+	  //当查找到对应的值的时候，直接赋值然后返回给用户(设置found_final_value).
       case kTypeValue: { //获取value
         if (s->inplace_update_support) {
           s->mem->GetLock(s->key->user_key())->ReadLock();
@@ -725,7 +732,7 @@ static bool SaveValue(void* arg, const char* entry) {
         }
         return false;
       }
-      case kTypeDeletion:
+      case kTypeDeletion://这里可以看到如果是Delete的话，直接返回NotFound.
       case kTypeSingleDeletion:
       case kTypeRangeDeletion: {
         if (*(s->merge_in_progress)) {
@@ -781,6 +788,8 @@ static bool SaveValue(void* arg, const char* entry) {
 // 如果能找到key对应的value, 将该value存储到*value参数中，返回值为true。
 // 如果这个key中的有删除标识,存放一个NotFound()错误到*status参数中，返回值为true。
 // 否则返回值为false
+
+//memtable查找参考http://mysql.taobao.org/monthly/2018/11/05/
 bool MemTable::Get(const LookupKey& key, std::string* value, Status* s,
                    MergeContext* merge_context,
                    SequenceNumber* max_covering_tombstone_seq,
@@ -847,6 +856,7 @@ bool MemTable::Get(const LookupKey& key, std::string* value, Status* s,
     saver.env_ = env_;
     saver.callback_ = callback;
     saver.is_blob_index = is_blob_index;
+	//MemTableRep::Get
     table_->Get(key, &saver, SaveValue);
 
     *seq = saver.seq;
@@ -1032,6 +1042,8 @@ size_t MemTable::CountSuccessiveMergeEntries(const LookupKey& key) {
   return num_successive_merges;
 }
 
+//MemTableRep这个类用来抽象不同的MemTable的实现，也就是说它是一个虚类，然后不同的MemTable实现了它
+//skiplist也就是默认的MemTable实现.
 void MemTableRep::Get(const LookupKey& k, void* callback_args,
                       bool (*callback_func)(void* arg, const char* entry)) {
   auto iter = GetDynamicPrefixIterator();

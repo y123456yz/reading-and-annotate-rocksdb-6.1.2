@@ -80,6 +80,7 @@ Vectorrep.cc (memtable):  class Iterator : public MemTableRep::Iterator {
 http://mysql.taobao.org/monthly/2017/05/08/
 http://mysql.taobao.org/monthly/2018/08/08/
 */
+//MemTableRep这个类用来抽象不同的MemTable的实现，也就是说它是一个虚类，然后不同的MemTable实现了它
 //SkipListRep等继承该类
 class MemTableRep {
  public:

@@ -1408,6 +1408,8 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
     // version because a flush happening in between may compact away data for
     // the snapshot, but the snapshot is earlier than the data overwriting it,
     // so users may see wrong results.
+    //每次调用Get的时候，RocksDB都会构造一个LookupKey,这里我们可以简单的认为这个seq就是
+    //当前的version最后一次写成功的seq(以后会介绍这里的publish_seq).
     snapshot = last_seq_same_as_publish_seq_
                    ? versions_->LastSequence()
                    : versions_->LastPublishedSequence();
@@ -1423,12 +1425,15 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
   // First look in the memtable, then in the immutable memtable (if any).
   // s is both in/out. When in, s could either be OK or MergeInProgress.
   // merge_operands will contain the sequence of merges in the latter case.
+  //每次调用Get的时候，RocksDB都会构造一个LookupKey,这里我们可以简单的认为这个seq就
+  //是当前的version最后一次写成功的seq(以后会介绍这里的publish_seq).
   LookupKey lkey(key, snapshot);
   PERF_TIMER_STOP(get_snapshot_time);
 
   bool skip_memtable = (read_options.read_tier == kPersistedTier &&
                         has_unpersisted_data_.load(std::memory_order_relaxed));
   bool done = false;
+  //调用MemTable::Get  memtable中查找 参考 http://mysql.taobao.org/monthly/2018/11/05
   if (!skip_memtable) {
     if (sv->mem->Get(lkey, pinnable_val->GetSelf(), &s, &merge_context,
                      &max_covering_tombstone_seq, read_options, callback,
@@ -1449,6 +1454,8 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
       return s;
     }
   }
+
+  //memtable中没找到，则从sst文件查找. 参考http://mysql.taobao.org/monthly/2018/12/08/
   if (!done) {
     PERF_TIMER_GUARD(get_from_output_files_time);
     sv->current->Get(read_options, lkey, pinnable_val, &s, &merge_context,

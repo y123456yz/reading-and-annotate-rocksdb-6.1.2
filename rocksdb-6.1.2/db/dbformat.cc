@@ -130,6 +130,7 @@ const char* InternalKeyComparator::Name() const { return name_.c_str(); }
 1）首先比较user_key，如果user_key不相同，就直接返回比较结果，否则继续进行第二步。user_comparator_是用户指定的比较器，在InternalKeyComparator构造时传入。
 2）在user_key相同的情况下，比较sequence_numer|value type然后返回结果(注意每个Internal Key的sequence_number是唯一的，因此不可能出现anum==bnum的情况)
 */
+//查找的地方见FindGreaterOrEqual
 int InternalKeyComparator::Compare(const ParsedInternalKey& a,
                                    const ParsedInternalKey& b) const {
   // Order by:
@@ -137,7 +138,8 @@ int InternalKeyComparator::Compare(const ParsedInternalKey& a,
   //    decreasing sequence number
   //    decreasing type (though sequence# should be enough to disambiguate)
   int r = user_comparator_.Compare(a.user_key, b.user_key);
-  //比较sequence和type
+  //user key相同，比较sequence和type
+  //当Key相同时，按照seq的降序，如果seq相同则按照type的降序
   if (r == 0) {
     if (a.sequence > b.sequence) {
       r = -1;
@@ -215,7 +217,7 @@ LookupKey::LookupKey(const Slice& _user_key, SequenceNumber s) {
   memcpy(dst, _user_key.data(), usize);
   dst += usize;
 
-  //紧跟后面的是SequenceNumber
+  //紧跟后面的是SequenceNumber+type，type用kValueTypeForSeek
   EncodeFixed64(dst, PackSequenceAndType(s, kValueTypeForSeek));
   dst += 8;
   end_ = dst;

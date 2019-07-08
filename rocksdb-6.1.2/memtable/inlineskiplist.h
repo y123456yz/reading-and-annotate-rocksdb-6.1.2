@@ -387,8 +387,10 @@ inline void InlineSkipList<Comparator>::Iterator::Prev() {
   }
 }
 
+//SkipListRep::iterator::seek
 template <class Comparator>
 inline void InlineSkipList<Comparator>::Iterator::Seek(const char* target) {
+  //InlineSkipList<Comparator>::FindGreaterOrEqual
   node_ = list_->FindGreaterOrEqual(target);
 }
 
@@ -449,6 +451,11 @@ bool InlineSkipList<Comparator>::KeyIsAfterNode(const DecodedKey& key,
   return (n != nullptr) && (compare_(n->Key(), key) < 0);
 }
 
+//key的排序(InternalKeyComparator::Compare),也就是当Key相同时，按照seq的降序，
+//如果seq相同则按照type的降序，那么此时FindGreaterOrEqual就比较好理解了，也就
+//是会返回小于我们输入seq的值，而当seq相等的话，则会返回小于我们的输入type的
+//值(由于我们传入的是最大的type,因此也就是会直接返回值).那么此时返回的位置有
+//可能key本身就比我们的输入key小，并且我们还需要根据不同的type来做不同的操作，那么此时就需要SaveValue回调了.
 template <class Comparator>
 typename InlineSkipList<Comparator>::Node*
 InlineSkipList<Comparator>::FindGreaterOrEqual(const char* key) const {

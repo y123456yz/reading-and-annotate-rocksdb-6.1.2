@@ -93,6 +93,7 @@ public:
 
   // Iteration over the contents of a skip list
   class Iterator : public MemTableRep::Iterator {
+    //¶¨Î»SkipListRep::iterator::seek
     InlineSkipList<const MemTableRep::KeyComparator&>::Iterator iter_;
 
    public:
@@ -124,6 +125,7 @@ public:
       if (memtable_key != nullptr) {
         iter_.Seek(memtable_key);
       } else {
+      //InlineSkipList<>::Iterator::Seek
         iter_.Seek(EncodeKey(&tmp_, user_key));
       }
     }

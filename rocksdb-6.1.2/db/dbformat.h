@@ -117,6 +117,7 @@ struct ParsedInternalKey {
   //同时sequence number是实现事务处理的关键，同时也是MVCC的基础。
   SequenceNumber sequence;
   //类型：标志本条数据项的类型，为更新还是删除；
+  //取值见enum ValueType {}   kTypeDeletion  kTypeValue kTypeMerge 
   ValueType type;
 
   ParsedInternalKey()
@@ -357,6 +358,11 @@ inline uint64_t GetInternalKeySeqno(const Slice& internal_key) {
 }
 
 // A helper class useful for DBImpl::Get()
+//每次调用Get的时候，RocksDB都会构造一个LookupKey,这里我们可以简单的认为这个seq就
+//是当前的version最后一次写成功的seq(以后会介绍这里的publish_seq).
+
+//根据user key或者memtabel key在skiplist中查找见SkipListRep::iterator::seek
+//见DBImpl::GetImpl
 class LookupKey {
  public:
   // Initialize *this for looking up user_key at a snapshot with
