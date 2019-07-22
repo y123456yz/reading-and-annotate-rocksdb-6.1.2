@@ -618,6 +618,7 @@ bool MemTable::Add(SequenceNumber s, ValueType type,
 namespace {
 
 //MemTable::Get中构造
+//这个数据结构用来保存查找内容时的上下文.
 struct Saver {
   Status* status;
   const LookupKey* key;

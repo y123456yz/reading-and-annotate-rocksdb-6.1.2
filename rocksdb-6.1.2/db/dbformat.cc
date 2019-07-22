@@ -127,6 +127,12 @@ std::string InternalKey::DebugString(bool hex) const {
 
 const char* InternalKeyComparator::Name() const { return name_.c_str(); }
 /*
+在RocksDB内部是如何组织的。在RocksDB中的不同版本的key是按照下面的逻辑进行排序:
+increasing user key (according to user-supplied comparator)
+decreasing sequence number
+decreasing type (though sequence# should be enough to disambiguate)
+*/
+/*
 1）首先比较user_key，如果user_key不相同，就直接返回比较结果，否则继续进行第二步。user_comparator_是用户指定的比较器，在InternalKeyComparator构造时传入。
 2）在user_key相同的情况下，比较sequence_numer|value type然后返回结果(注意每个Internal Key的sequence_number是唯一的，因此不可能出现anum==bnum的情况)
 */

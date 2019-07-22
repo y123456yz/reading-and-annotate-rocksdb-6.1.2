@@ -34,6 +34,7 @@ class InternalKey;
 // for them to do more flexible encoding.
 enum ValueType : unsigned char {
   kTypeDeletion = 0x0,
+  //value就表示是插入
   kTypeValue = 0x1,
   kTypeMerge = 0x2,
   kTypeLogData = 0x3,               // WAL only.
@@ -367,6 +368,7 @@ class LookupKey {
  public:
   // Initialize *this for looking up user_key at a snapshot with
   // the specified sequence number.
+  //每次构造lookupkey的时候，必须得传入一个seq,那么这个seq是如何计算的呢，可以参考DBImpl::GetImpl
   LookupKey(const Slice& _user_key, SequenceNumber sequence);
 
   ~LookupKey();
