@@ -105,7 +105,8 @@ static const SequenceNumber kDisableGlobalSequenceNumber = port::kMaxUint64;
 //3. InternalKey和ParsedInternalKey相互转换的两个函数，如下。
 //  Inline bool ParseInternalKey()将internal_key（Slice）解析出来为result
 //  AppendInternalKey() 将key（ParsedInternalKey）序列化为result（Internel key）
-//
+
+//注意LookupKey和ParsedInternalKey对应比较
 //解码获取成员值见ParseInternalKey
 struct ParsedInternalKey {
   //用户定义的key：这个key值也就是原生的key值；
@@ -364,7 +365,7 @@ inline uint64_t GetInternalKeySeqno(const Slice& internal_key) {
 
 //根据user key或者memtabel key在skiplist中查找见SkipListRep::iterator::seek
 //见DBImpl::GetImpl
-class LookupKey {
+class LookupKey { //注意LookupKey和ParsedInternalKey对应比较
  public:
   // Initialize *this for looking up user_key at a snapshot with
   // the specified sequence number.
@@ -391,7 +392,7 @@ class LookupKey {
     return Slice(kstart_, static_cast<size_t>(end_ - kstart_ - 8));
   }
 
- private:
+ private: //参考LookupKey::LookupKey
   // We construct a char array of the form:
   //    klength  varint32               <-- start_    #1
   //    userkey  char[klength]          <-- kstart_   #2

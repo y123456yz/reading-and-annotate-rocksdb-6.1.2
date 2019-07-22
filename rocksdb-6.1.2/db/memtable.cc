@@ -651,6 +651,9 @@ struct Saver {
 //则就是我们在SkipListRep::iterator::seek->InlineSkipList<>::Iterator::Seek中定
 //位到的位置.这个函数要做的比较简单，首先就是判断是否得到的key和我们传递进来的key相同，
 //如果不同，则说明查找的key不合法，因此直接返回.这里我们着重来看对于插入和删除的处理.
+
+//第一个参数是之前保存的Saver对象，第二个则就是我们在skiplist中定位到的位置
+//MemTable::Get->MemTableRep::Get
 static bool SaveValue(void* arg, const char* entry) {
   Saver* s = reinterpret_cast<Saver*>(arg);
   assert(s != nullptr);
@@ -1047,11 +1050,14 @@ size_t MemTable::CountSuccessiveMergeEntries(const LookupKey& key) {
 
 //MemTableRep这个类用来抽象不同的MemTable的实现，也就是说它是一个虚类，然后不同的MemTable实现了它
 //skiplist也就是默认的MemTable实现.
+//MemTable::Get
 void MemTableRep::Get(const LookupKey& k, void* callback_args,
                       bool (*callback_func)(void* arg, const char* entry)) {
   auto iter = GetDynamicPrefixIterator();
-  for (iter->Seek(k.internal_key(), k.memtable_key().data());
-       iter->Valid() && callback_func(callback_args, iter->key());
+
+  //先seek，然后执行对应的callback_func
+  for (iter->Seek(k.internal_key(), k.memtable_key().data());  //skiplist对应SkipListRep::seek
+       iter->Valid() && callback_func(callback_args, iter->key()); //callback_func对应SaveValue
        iter->Next()) {
   }
 }

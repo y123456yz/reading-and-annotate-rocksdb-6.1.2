@@ -48,7 +48,7 @@ static const SequenceNumber kMaxSequenceNumber = ((0x1ull << 56) - 1);
 uint64_t PackSequenceAndType(uint64_t seq, ValueType t) {
   assert(seq <= kMaxSequenceNumber);
   assert(IsExtendedValueType(t));
-  return (seq << 8) | t;
+  return (seq << 8) | t; //低8位为type,其他的为seq
 }
 
 EntryType GetEntryType(ValueType value_type) {
@@ -136,7 +136,8 @@ decreasing type (though sequence# should be enough to disambiguate)
 1）首先比较user_key，如果user_key不相同，就直接返回比较结果，否则继续进行第二步。user_comparator_是用户指定的比较器，在InternalKeyComparator构造时传入。
 2）在user_key相同的情况下，比较sequence_numer|value type然后返回结果(注意每个Internal Key的sequence_number是唯一的，因此不可能出现anum==bnum的情况)
 */
-//查找的地方见FindGreaterOrEqual
+//查找的地方见FindGreaterOrEqual 
+//InternalKeyComparator::Compare和InlineSkipList<>::FindGreaterOrEqual配合阅读
 int InternalKeyComparator::Compare(const ParsedInternalKey& a,
                                    const ParsedInternalKey& b) const {
   // Order by:
