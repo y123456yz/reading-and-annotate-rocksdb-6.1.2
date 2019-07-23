@@ -26,7 +26,7 @@ class GetContext;
 // A Table is a sorted map from strings to strings.  Tables are
 // immutable and persistent.  A Table may be safely accessed from
 // multiple threads without external synchronization.
-//BlockBasedTable继承该类
+//BlockBasedTable继承该类  这个结构就是用来保存SST文件的内容
 class TableReader {
  public:
   virtual ~TableReader() {}

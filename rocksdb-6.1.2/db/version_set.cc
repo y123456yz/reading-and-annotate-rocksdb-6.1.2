@@ -1206,6 +1206,7 @@ Version::Version(ColumnFamilyData* column_family_data, VersionSet* vset,
       mutable_cf_options_(mutable_cf_options),
       version_number_(version_number) {}
 
+// 这个函数简单来说就是根据所需要查找的key,然后选择对应的文件,这里每次会返回一个文件(key在sst的key范围内),然后循环查找.
 //查找函数，直接在DBImpl::Get()中被调用  sst中查找
 //memtable查找MemTable::Get  SST文件中查找Version::Get
 void Version::Get(const ReadOptions& read_options, const LookupKey& k,
@@ -1285,6 +1286,8 @@ void Version::Get(const ReadOptions& read_options, const LookupKey& k,
         db_statistics_ != nullptr) {
       get_context.ReportCounters();
     }
+
+	//table_cache_->Get返回之后，我们需要根据get_context来判断返回的结果
     switch (get_context.State()) {
       case GetContext::kNotFound: // 继续搜索下一个更早的sstable文件  
         // Keep searching in other files

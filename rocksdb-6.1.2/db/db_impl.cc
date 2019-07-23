@@ -1459,6 +1459,7 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
   if (!done) {
     PERF_TIMER_GUARD(get_from_output_files_time);
 	//直接从当前的version(sv->current)调用Get方法
+	// 这个函数简单来说就是根据所需要查找的key,然后选择对应的文件,这里每次会返回一个文件(key在sst的key范围内),然后循环查找.
 	//Version::Get
     sv->current->Get(read_options, lkey, pinnable_val, &s, &merge_context,
                      &max_covering_tombstone_seq, value_found, nullptr, nullptr,

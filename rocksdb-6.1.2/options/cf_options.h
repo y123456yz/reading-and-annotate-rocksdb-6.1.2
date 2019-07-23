@@ -113,6 +113,8 @@ struct ImmutableCFOptions {
   // when specific RocksDB event happens.
   std::vector<std::shared_ptr<EventListener>> listeners;
 
+  //row cache就是对当前的所需要查找的key在当前sst中对应的value进行cache.
+  //参考TableCache::Get
   std::shared_ptr<Cache> row_cache;
 
   uint32_t max_subcompactions;

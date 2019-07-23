@@ -39,6 +39,16 @@ struct FileLevel;
 // only N files from level below (where N is max_bytes_for_level_multiplier).
 // So on level L, we will only look at ~N files instead of N^L files on the
 // naive approach.
+/*
+RocksDB使用了一个技巧用来加快二分查找的速度，每次更新sst的时候，RocksDB都会调用FileIndexer::UpdateIndex
+来更新这样的一个结构,这个结构就是FileIndexer，它主要是用来保存每一个level和level+1的key范围的关联信息，
+这样当我们在level查找的时候，如果没有查找到信息，那么我们将会迅速得到下一个level需要查找的文件范围.每一
+个key来进行比较总会有三种情况:
+
+小于当前sst的smallest.
+大于当前sst的largest.
+处于这个范围.
+*/
 class FileIndexer {
  public:
   explicit FileIndexer(const Comparator* ucmp);
@@ -104,6 +114,9 @@ class FileIndexer {
     //
     // Point to a left most file in a lower level that may contain a key,
     // which compares greater than smallest of a FileMetaData (upper level)
+
+    //查找代码实现见FileIndexer::GetNextLevelIndex
+    
     int32_t smallest_lb;
     // Point to a left most file in a lower level that may contain a key,
     // which compares greater than largest of a FileMetaData (upper level)
