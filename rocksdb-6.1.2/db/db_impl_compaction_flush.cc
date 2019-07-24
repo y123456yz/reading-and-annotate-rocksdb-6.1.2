@@ -1767,6 +1767,10 @@ Status DBImpl::EnableAutoCompaction(
   return s;
 }
 
+//在RocksDB中所有的compact都是在后台线程中进行的，这个线程就是BGWorkCompaction.
+// 这个线程只有在两种情况下被调用，一个是 手动compact(RunManualCompaction),
+// 一个就是自动(MaybeScheduleFlushOrCompaction),
+//而MaybeScheduleFlushOrCompaction就是会在切换WAL(SwitchWAL)或者writebuffer满的时候(HandleWriteBufferFull)被调用.
 void DBImpl::MaybeScheduleFlushOrCompaction() {
   mutex_.AssertHeld();
   if (!opened_successfully_) {
@@ -1943,7 +1947,9 @@ void DBImpl::SchedulePendingFlush(const FlushRequest& flush_req,
 }
 
 void DBImpl::SchedulePendingCompaction(ColumnFamilyData* cfd) {
-  if (!cfd->queued_for_compaction() && cfd->NeedsCompaction()) {
+  //unscheduled_compactions_和队列的更新是同步的，因此只有compaction_queue_更新之后，
+  //调用compact后台线程才会进入compact处理.
+  if (!cfd->queued_for_compaction() && cfd->NeedsCompaction()) { //LevelCompactionPicker::NeedsCompaction
     AddToCompactionQueue(cfd);
     ++unscheduled_compactions_;
   }
@@ -1966,6 +1972,9 @@ void DBImpl::BGWorkFlush(void* arg) {
   TEST_SYNC_POINT("DBImpl::BGWorkFlush:done");
 }
 
+//在RocksDB中所有的compact都是在后台线程中进行的，这个线程就是BGWorkCompaction.
+// 这个线程只有在两种情况下被调用，一个是 手动compact(RunManualCompaction),
+// 一个就是自动(MaybeScheduleFlushOrCompaction),
 void DBImpl::BGWorkCompaction(void* arg) {
   CompactionArg ca = *(reinterpret_cast<CompactionArg*>(arg));
   delete reinterpret_cast<CompactionArg*>(arg);

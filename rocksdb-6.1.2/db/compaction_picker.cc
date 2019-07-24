@@ -1068,8 +1068,17 @@ bool CompactionPicker::GetOverlappingL0Files(
   return true;
 }
 
+//ColumnFamilyData::NeedsCompaction
+//NeedsCompaction,通过这个函数来判断是否有sst需要被compact，因此接下来我们就来详细分析这个函数.
+//当满足下列几个条件之一就将会更新compact队列
+// 有超时的sst(ExpiredTtlFiles)
+// files_marked_for_compaction_或者bottommost_files_marked_for_compaction_都不为空
+// 
+// 遍历所有的level的sst,然后判断是否需要compact
+//   最核心的条件(上面两个队列都是在这里更新的).
 bool LevelCompactionPicker::NeedsCompaction(
     const VersionStorageInfo* vstorage) const {
+  //有超时的sst(ExpiredTtlFiles)
   if (!vstorage->ExpiredTtlFiles().empty()) {
     return true;
   }
@@ -1079,6 +1088,8 @@ bool LevelCompactionPicker::NeedsCompaction(
   if (!vstorage->FilesMarkedForCompaction().empty()) {
     return true;
   }
+
+  //遍历所有的level的sst,然后判断是否需要compact
   for (int i = 0; i <= vstorage->MaxInputLevel(); i++) {
     if (vstorage->CompactionScore(i) >= 1) {
       return true;

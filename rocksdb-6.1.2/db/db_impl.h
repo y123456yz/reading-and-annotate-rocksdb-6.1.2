@@ -1456,6 +1456,7 @@ class DBImpl : public DB {
   std::deque<FlushRequest> flush_queue_;
   // invariant(column family present in compaction_queue_ <==>
   // ColumnFamilyData::pending_compaction_ == true)
+  //compaction队列 DBImpl::SchedulePendingCompaction
   std::deque<ColumnFamilyData*> compaction_queue_;
 
   // A queue to store filenames of the files to be purged
@@ -1468,6 +1469,8 @@ class DBImpl : public DB {
   // A queue to store log writers to close
   std::deque<log::Writer*> logs_to_free_queue_;
   int unscheduled_flushes_;
+
+  //表示需要被compact的columnfamily的队列长度.  DBImpl::SchedulePendingCompaction中自增
   int unscheduled_compactions_;
 
   // count how many background compactions are running or have been scheduled in

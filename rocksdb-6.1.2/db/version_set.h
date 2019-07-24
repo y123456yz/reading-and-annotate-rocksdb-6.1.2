@@ -90,6 +90,131 @@ extern void DoGenerateLevelFilesBrief(LevelFilesBrief* file_level,
                                       Arena* arena);
 
 class VersionStorageInfo {
+    private:
+     const InternalKeyComparator* internal_comparator_;
+     const Comparator* user_comparator_;
+     int num_levels_;            // Number of levels
+     int num_non_empty_levels_;  // Number of levels. Any level larger than it
+                                 // is guaranteed to be empty.
+     // Per-level max bytes
+     //level_max_bytes这个数组是在VersionStorageInfo::CalculateBaseBytes 这个函数中被初始化
+     std::vector<uint64_t> level_max_bytes_;
+    
+     // A short brief metadata of files per level
+     autovector<rocksdb::LevelFilesBrief> level_files_brief_;
+     FileIndexer file_indexer_;
+     Arena arena_;  // Used to allocate space for file_levels_
+    
+     CompactionStyle compaction_style_;
+    
+     // List of files per level, files in each level are arranged
+     // in increasing order of keys
+     std::vector<FileMetaData*>* files_;
+    
+     // Level that L0 data should be compacted to. All levels < base_level_ should
+     // be empty. -1 if it is not level-compaction so it's not applicable.
+     int base_level_;
+    
+     double level_multiplier_;
+    
+     // A list for the same set of files that are stored in files_,
+     // but files in each level are now sorted based on file
+     // size. The file with the largest size is at the front.
+     // This vector stores the index of the file from files_.
+     std::vector<std::vector<int>> files_by_compaction_pri_;
+    
+     // If true, means that files in L0 have keys with non overlapping ranges
+     bool level0_non_overlapping_;
+    
+     // An index into files_by_compaction_pri_ that specifies the first
+     // file that is not yet compacted
+     std::vector<int> next_file_to_compact_by_size_;
+    
+     // Only the first few entries of files_by_compaction_pri_ are sorted.
+     // There is no need to sort all the files because it is likely
+     // that on a running system, we need to look at only the first
+     // few largest files because a new version is created every few
+     // seconds/minutes (because of concurrent compactions).
+     static const size_t number_of_files_to_sort_ = 50;
+    
+     // This vector contains list of files marked for compaction and also not
+     // currently being compacted. It is protected by DB mutex. It is calculated in
+     // ComputeCompactionScore()
+     autovector<std::pair<int, FileMetaData*>> files_marked_for_compaction_;
+    
+     autovector<std::pair<int, FileMetaData*>> expired_ttl_files_;
+    
+     // These files are considered bottommost because none of their keys can exist
+     // at lower levels. They are not necessarily all in the same level. The marked
+     // ones are eligible for compaction because they contain duplicate key
+     // versions that are no longer protected by snapshot. These variables are
+     // protected by DB mutex and are calculated in `GenerateBottommostFiles()` and
+     // `ComputeBottommostFilesMarkedForCompaction()`.
+     autovector<std::pair<int, FileMetaData*>> bottommost_files_;
+     autovector<std::pair<int, FileMetaData*>>
+         bottommost_files_marked_for_compaction_;
+    
+     // Threshold for needing to mark another bottommost file. Maintain it so we
+     // can quickly check when releasing a snapshot whether more bottommost files
+     // became eligible for compaction. It's defined as the min of the max nonzero
+     // seqnums of unmarked bottommost files.
+     SequenceNumber bottommost_files_mark_threshold_ = kMaxSequenceNumber;
+    
+     // Monotonically increases as we release old snapshots. Zero indicates no
+     // snapshots have been released yet. When no snapshots remain we set it to the
+     // current seqnum, which needs to be protected as a snapshot can still be
+     // created that references it.
+     SequenceNumber oldest_snapshot_seqnum_ = 0;
+    
+     // Level that should be compacted next and its compaction score.
+     // Score < 1 means compaction is not strictly needed.  These fields
+     // are initialized by Finalize().
+     // The most critical level to be compacted is listed first
+     // These are used to pick the best compaction level
+    
+     //CompactionScore,这里将会涉及到两个变量,这两个变量分别保存了level以
+     //及每个level所对应的score(这里score越高表示compact优先级越高)，而score小于１则表示不需要compact.
+     //获取score使用见LevelCompactionPicker::NeedsCompaction
+     //这两个vector是在VersionStorageInfo::ComputeCompactionScore中被更新
+     std::vector<double> compaction_score_;
+     std::vector<int> compaction_level_;
+     int l0_delay_trigger_count_ = 0;  // Count used to trigger slow down and stop
+                                       // for number of L0 files.
+    
+     // the following are the sampled temporary stats.
+     // the current accumulated size of sampled files.
+     uint64_t accumulated_file_size_;
+     // the current accumulated size of all raw keys based on the sampled files.
+     uint64_t accumulated_raw_key_size_;
+     // the current accumulated size of all raw keys based on the sampled files.
+     uint64_t accumulated_raw_value_size_;
+     // total number of non-deletion entries
+     uint64_t accumulated_num_non_deletions_;
+     // total number of deletion entries
+     uint64_t accumulated_num_deletions_;
+     // current number of non_deletion entries
+     uint64_t current_num_non_deletions_;
+     // current number of deletion entries
+     uint64_t current_num_deletions_;
+     // current number of file samples
+     uint64_t current_num_samples_;
+     // Estimated bytes needed to be compacted until all levels' size is down to
+     // target sizes.
+     uint64_t estimated_compaction_needed_bytes_;
+    
+     bool finalized_;
+    
+     // If set to true, we will run consistency checks even if RocksDB
+     // is compiled in release mode
+     bool force_consistency_checks_;
+    
+     friend class Version;
+     friend class VersionSet;
+     // No copying allowed
+     VersionStorageInfo(const VersionStorageInfo&) = delete;
+     void operator=(const VersionStorageInfo&) = delete;
+
+
  public:
   VersionStorageInfo(const InternalKeyComparator* internal_comparator,
                      const Comparator* user_comparator, int num_levels,
@@ -416,123 +541,7 @@ class VersionStorageInfo {
                                      const Slice& largest_user_key,
                                      int last_level, int last_l0_idx);
 
- private:
-  const InternalKeyComparator* internal_comparator_;
-  const Comparator* user_comparator_;
-  int num_levels_;            // Number of levels
-  int num_non_empty_levels_;  // Number of levels. Any level larger than it
-                              // is guaranteed to be empty.
-  // Per-level max bytes
-  std::vector<uint64_t> level_max_bytes_;
 
-  // A short brief metadata of files per level
-  autovector<rocksdb::LevelFilesBrief> level_files_brief_;
-  FileIndexer file_indexer_;
-  Arena arena_;  // Used to allocate space for file_levels_
-
-  CompactionStyle compaction_style_;
-
-  // List of files per level, files in each level are arranged
-  // in increasing order of keys
-  std::vector<FileMetaData*>* files_;
-
-  // Level that L0 data should be compacted to. All levels < base_level_ should
-  // be empty. -1 if it is not level-compaction so it's not applicable.
-  int base_level_;
-
-  double level_multiplier_;
-
-  // A list for the same set of files that are stored in files_,
-  // but files in each level are now sorted based on file
-  // size. The file with the largest size is at the front.
-  // This vector stores the index of the file from files_.
-  std::vector<std::vector<int>> files_by_compaction_pri_;
-
-  // If true, means that files in L0 have keys with non overlapping ranges
-  bool level0_non_overlapping_;
-
-  // An index into files_by_compaction_pri_ that specifies the first
-  // file that is not yet compacted
-  std::vector<int> next_file_to_compact_by_size_;
-
-  // Only the first few entries of files_by_compaction_pri_ are sorted.
-  // There is no need to sort all the files because it is likely
-  // that on a running system, we need to look at only the first
-  // few largest files because a new version is created every few
-  // seconds/minutes (because of concurrent compactions).
-  static const size_t number_of_files_to_sort_ = 50;
-
-  // This vector contains list of files marked for compaction and also not
-  // currently being compacted. It is protected by DB mutex. It is calculated in
-  // ComputeCompactionScore()
-  autovector<std::pair<int, FileMetaData*>> files_marked_for_compaction_;
-
-  autovector<std::pair<int, FileMetaData*>> expired_ttl_files_;
-
-  // These files are considered bottommost because none of their keys can exist
-  // at lower levels. They are not necessarily all in the same level. The marked
-  // ones are eligible for compaction because they contain duplicate key
-  // versions that are no longer protected by snapshot. These variables are
-  // protected by DB mutex and are calculated in `GenerateBottommostFiles()` and
-  // `ComputeBottommostFilesMarkedForCompaction()`.
-  autovector<std::pair<int, FileMetaData*>> bottommost_files_;
-  autovector<std::pair<int, FileMetaData*>>
-      bottommost_files_marked_for_compaction_;
-
-  // Threshold for needing to mark another bottommost file. Maintain it so we
-  // can quickly check when releasing a snapshot whether more bottommost files
-  // became eligible for compaction. It's defined as the min of the max nonzero
-  // seqnums of unmarked bottommost files.
-  SequenceNumber bottommost_files_mark_threshold_ = kMaxSequenceNumber;
-
-  // Monotonically increases as we release old snapshots. Zero indicates no
-  // snapshots have been released yet. When no snapshots remain we set it to the
-  // current seqnum, which needs to be protected as a snapshot can still be
-  // created that references it.
-  SequenceNumber oldest_snapshot_seqnum_ = 0;
-
-  // Level that should be compacted next and its compaction score.
-  // Score < 1 means compaction is not strictly needed.  These fields
-  // are initialized by Finalize().
-  // The most critical level to be compacted is listed first
-  // These are used to pick the best compaction level
-  std::vector<double> compaction_score_;
-  std::vector<int> compaction_level_;
-  int l0_delay_trigger_count_ = 0;  // Count used to trigger slow down and stop
-                                    // for number of L0 files.
-
-  // the following are the sampled temporary stats.
-  // the current accumulated size of sampled files.
-  uint64_t accumulated_file_size_;
-  // the current accumulated size of all raw keys based on the sampled files.
-  uint64_t accumulated_raw_key_size_;
-  // the current accumulated size of all raw keys based on the sampled files.
-  uint64_t accumulated_raw_value_size_;
-  // total number of non-deletion entries
-  uint64_t accumulated_num_non_deletions_;
-  // total number of deletion entries
-  uint64_t accumulated_num_deletions_;
-  // current number of non_deletion entries
-  uint64_t current_num_non_deletions_;
-  // current number of deletion entries
-  uint64_t current_num_deletions_;
-  // current number of file samples
-  uint64_t current_num_samples_;
-  // Estimated bytes needed to be compacted until all levels' size is down to
-  // target sizes.
-  uint64_t estimated_compaction_needed_bytes_;
-
-  bool finalized_;
-
-  // If set to true, we will run consistency checks even if RocksDB
-  // is compiled in release mode
-  bool force_consistency_checks_;
-
-  friend class Version;
-  friend class VersionSet;
-  // No copying allowed
-  VersionStorageInfo(const VersionStorageInfo&) = delete;
-  void operator=(const VersionStorageInfo&) = delete;
 };
 
 /*

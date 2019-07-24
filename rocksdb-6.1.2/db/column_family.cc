@@ -913,7 +913,9 @@ void ColumnFamilyData::CreateNewMemtable(
   mem_->Ref();
 }
 
-bool ColumnFamilyData::NeedsCompaction() const {
+//DBImpl::SchedulePendingCompaction
+bool ColumnFamilyData::NeedsCompaction() const { 
+  //LevelCompactionPicker::NeedsCompaction
   return compaction_picker_->NeedsCompaction(current_->storage_info());
 }
 

@@ -1647,6 +1647,13 @@ uint32_t GetExpiredTtlFilesCount(const ImmutableCFOptions& ioptions,
 }
 }  // anonymous namespace
 
+//计算compaction_score_
+//这个函数中会对level-0和其他的level区别处理。 首先来看level-0的处理:
+// 1.首先会计算level-0下所有文件的大小(total_size)以及文件个数(num_sorted_runs).
+// 2. 用文件个数除以level0_file_num_compaction_trigger来得到对应的score
+// 3. 如果当前不止一层level,那么将会从上面的score和(total_size/max_bytes_for_level_base)取最大值.
+//  之所以要做第三步，主要还是为了防止level-0的文件size过大，那么当它需要compact的时候有可能会
+//  需要和level-1 compact,那么此时就有可能会有一个很大的compact.
 void VersionStorageInfo::ComputeCompactionScore(
     const ImmutableCFOptions& immutable_cf_options,
     const MutableCFOptions& mutable_cf_options) {
@@ -1713,6 +1720,7 @@ void VersionStorageInfo::ComputeCompactionScore(
       }
     } else {
       // Compute the ratio of current size to size limit.
+      //然后是非level-0的处理,这里也是计算level的文件大小然后再除以MaxBytesForLevel，然后得到当前level的score.
       uint64_t level_bytes_no_compacting = 0;
       for (auto f : files_[level]) {
         if (!f->being_compacted) {
@@ -1720,7 +1728,7 @@ void VersionStorageInfo::ComputeCompactionScore(
         }
       }
       score = static_cast<double>(level_bytes_no_compacting) /
-              MaxBytesForLevel(level);
+              MaxBytesForLevel(level); //VersionStorageInfo::MaxBytesForLevel
     }
     compaction_level_[level] = level;
     compaction_score_[level] = score;
@@ -2529,6 +2537,7 @@ int64_t VersionStorageInfo::MaxNextLevelOverlappingBytes() {
   return result;
 }
 
+//得到当前level的最大的文件大小.而这个函数实现也很简单.
 uint64_t VersionStorageInfo::MaxBytesForLevel(int level) const {
   // Note: the result for level zero is not really used since we set
   // the level-0 compaction threshold based on number of files.
@@ -2555,23 +2564,31 @@ void VersionStorageInfo::CalculateBaseBytes(const ImmutableCFOptions& ioptions,
   set_l0_delay_trigger_count(num_l0_count);
 
   level_max_bytes_.resize(ioptions.num_levels);
+
+  //level_compaction_dynamic_level_bytes,这个配置如果被设置，那么level_max_bytes将会这样 设置(这里我们只关注level):
+  // 如果是level-1那么level-1的的文件大小限制为options.max_bytes_for_level_base.
+  // 如果level大于1那么当前level-i的大小限制为(其中max_bytes这两个变量都是options中设置的)
   if (!ioptions.level_compaction_dynamic_level_bytes) {
     base_level_ = (ioptions.compaction_style == kCompactionStyleLevel) ? 1 : -1;
 
     // Calculate for static bytes base case
+    //确定各level层的level_max_bytes_
+    //举个例子,如果max_bytes_for_level_base=1024,max_bytes_for_level_multiplier=10,
+    //然后max_bytes_for_level_multiplier_additional未设置，那么L1, L2,L3的大小限制分别为1024,10240,102400.
     for (int i = 0; i < ioptions.num_levels; ++i) {
       if (i == 0 && ioptions.compaction_style == kCompactionStyleUniversal) {
         level_max_bytes_[i] = options.max_bytes_for_level_base;
-      } else if (i > 1) {
+      } else if (i > 1) { //如果level大于1那么当前level-i的大小限制为(其中max_bytes这两个变量都是options中设置的)
+      //Target_Size(Ln+1) = Target_Size(Ln) * max_bytes_for_level_multiplier * max_bytes_for_level_multiplier_additional[n].
         level_max_bytes_[i] = MultiplyCheckOverflow(
             MultiplyCheckOverflow(level_max_bytes_[i - 1],
                                   options.max_bytes_for_level_multiplier),
             options.MaxBytesMultiplerAdditional(i - 1));
-      } else {
+      } else { //如果是level=1那么level-=1的的文件大小限制为options.max_bytes_for_level_base.
         level_max_bytes_[i] = options.max_bytes_for_level_base;
       }
     }
-  } else {
+  } else { //如果level_compaction_dynamic_level_bytes没有被设置
     uint64_t max_level_size = 0;
 
     int first_non_empty_level = -1;
