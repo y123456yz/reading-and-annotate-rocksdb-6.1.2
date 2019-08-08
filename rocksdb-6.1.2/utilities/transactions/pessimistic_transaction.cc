@@ -534,6 +534,7 @@ Status PessimisticTransaction::LockBatch(WriteBatch* batch,
 // If check_shapshot is true and this transaction has a snapshot set,
 // this key will only be locked if there have been no writes to this key since
 // the snapshot time.
+//Pessimistic加锁流程:TransactionBaseImpl::TryLock -> PessimisticTransaction::TryLock -> PessimisticTransactionDB::TryLock -> TransactionLockMgr::TryLock
 Status PessimisticTransaction::TryLock(ColumnFamilyHandle* column_family,
                                        const Slice& key, bool read_only,
                                        bool exclusive, const bool do_validate,
@@ -569,7 +570,7 @@ Status PessimisticTransaction::TryLock(ColumnFamilyHandle* column_family,
   }
 
   // Lock this key if this transactions hasn't already locked it or we require
-  // an upgrade.
+  // an upgrade. // 加锁
   if (!previously_locked || lock_upgrade) {
     s = txn_db_impl_->TryLock(this, cfh_id, key_str, exclusive);
   }
@@ -607,11 +608,14 @@ Status PessimisticTransaction::TryLock(ColumnFamilyHandle* column_family,
     // If we already have validated an earilier snapshot it must has been
     // reflected in tracked_at_seq and ValidateSnapshot will return OK.
     if (s.ok()) {
+	  // 使用事务一开始拿到的snapshot的sequence1与这个key在DB中最新
+      // 的sequence2进行比较，如果sequence2 > sequence1则代表在snapshot
+      // 之后，外部有对key进行过写入，有冲突！
       s = ValidateSnapshot(column_family, key, &tracked_at_seq);
 
       if (!s.ok()) {
         // Failed to validate key
-        if (!previously_locked) {
+        if (!previously_locked) {// 检测到冲突，解锁
           // Unlock key we just locked
           if (lock_upgrade) {
             s = txn_db_impl_->TryLock(this, cfh_id, key_str,
@@ -625,7 +629,7 @@ Status PessimisticTransaction::TryLock(ColumnFamilyHandle* column_family,
     }
   }
 
-  if (s.ok()) {
+  if (s.ok()) { // 如果加锁及冲突检测通过，记录这个key以便事务结束时释放掉锁
     // We must track all the locked keys so that we can unlock them later. If
     // the key is already locked, this func will update some stats on the
     // tracked key. It could also update the tracked_at_seq if it is lower than
@@ -640,6 +644,9 @@ Status PessimisticTransaction::TryLock(ColumnFamilyHandle* column_family,
 // transaction snapshot_.
 // tracked_at_seq is the global seq at which we either locked the key or already
 // have done ValidateSnapshot.
+//ValidateSnapshot就是进行冲突检测，通过将事务设置的snapshot与key最新的sequence进行比较，如果小于key最
+//新的sequence，则代表设置snapshot后，外部事务修改过这个key，有冲突！获取key最新的sequence也是简单粗暴，
+//遍历memtable，immutable memtable，memtable list history及SST文件来拿。
 Status PessimisticTransaction::ValidateSnapshot(
     ColumnFamilyHandle* column_family, const Slice& key,
     SequenceNumber* tracked_at_seq) {

@@ -289,7 +289,7 @@ bool TransactionLockMgr::IsLockExpired(TransactionID txn_id,
 
   return expired;
 }
-
+//Pessimistic¼ÓËøÁ÷³Ì:TransactionBaseImpl::TryLock -> PessimisticTransaction::TryLock -> PessimisticTransactionDB::TryLock -> TransactionLockMgr::TryLock
 Status TransactionLockMgr::TryLock(PessimisticTransaction* txn,
                                    uint32_t column_family_id,
                                    const std::string& key, Env* env,

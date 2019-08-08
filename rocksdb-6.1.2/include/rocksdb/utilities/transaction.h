@@ -50,6 +50,11 @@ class TransactionNotifier {
 // TODO(agiardullo): Not yet implemented
 //  -PerfContext statistics
 //  -Support for using Transactions with DBWithTTL
+/*
+RocksDB的Transaction分为两类：Pessimistic和Optimistic，类似悲观锁和乐观锁的区别，
+  PessimisticTransaction的冲突检测和加锁是在事务中每次写操作之前做的（commit后释放），如果失败则该操作失败；
+  OptimisticTransaction不加锁，冲突检测是在commit阶段做的，commit时发现冲突则失败。
+*/
 class Transaction {
  public:
   virtual ~Transaction() {}

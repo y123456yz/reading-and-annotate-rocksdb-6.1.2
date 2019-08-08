@@ -378,6 +378,7 @@ Status PessimisticTransactionDB::DropColumnFamily(
   return s;
 }
 
+//Pessimistic¼ÓËøÁ÷³Ì:TransactionBaseImpl::TryLock -> PessimisticTransaction::TryLock -> PessimisticTransactionDB::TryLock -> TransactionLockMgr::TryLock
 Status PessimisticTransactionDB::TryLock(PessimisticTransaction* txn,
                                          uint32_t cfh_id,
                                          const std::string& key,

@@ -991,6 +991,9 @@ Status WriteBatch::PutLogData(const Slice& blob) {
   return save.commit();
 }
 
+//事务的SetSavePoint和RollbackToSavePoint也是通过WriteBatch来实现的，SetSavePoint记录当前WriteBatch的大
+//小及统计信息，若干操作之后，若想回滚，则只需要将WriteBatch truncate到之前记录的大小并恢复统计信息即可。
+//TransactionBaseImpl::SetSavePoint
 void WriteBatch::SetSavePoint() {
   if (save_points_ == nullptr) {
     save_points_ = new SavePoints();
@@ -1000,6 +1003,9 @@ void WriteBatch::SetSavePoint() {
       GetDataSize(), Count(), content_flags_.load(std::memory_order_relaxed)));
 }
 
+
+//事务的SetSavePoint和RollbackToSavePoint也是通过WriteBatch来实现的，SetSavePoint记录当前WriteBatch的大
+//小及统计信息，若干操作之后，若想回滚，则只需要将WriteBatch truncate到之前记录的大小并恢复统计信息即可。
 Status WriteBatch::RollbackToSavePoint() {
   if (save_points_ == nullptr || save_points_->stack.size() == 0) {
     return Status::NotFound();

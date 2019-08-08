@@ -82,6 +82,12 @@ class WBWIIterator {
 // By calling GetWriteBatch(), a user will get the WriteBatch for the data
 // they inserted, which can be used for DB::Write().
 // A user can call NewIterator() to create an iterator.
+
+/*
+WriteBatchWithIndex在WriteBatch之外，额外搞一个Skiplist来记录每一个操作在WriteBatch中
+的offset等信息。在事务没有commit之前，数据还不在Memtable中，而是存在WriteBatch里，如果
+有需要，这时候可以通过WriteBatchWithIndex来拿到自己刚刚写入的但还没有提交的数据。
+*/
 class WriteBatchWithIndex : public WriteBatchBase {
  public:
   // backup_index_comparator: the backup comparator used to compare keys

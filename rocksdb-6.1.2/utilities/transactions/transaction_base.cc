@@ -100,7 +100,12 @@ void TransactionBaseImpl::SetSnapshotIfNeeded() {
     }
   }
 }
+/*
+Pessimistic的trylock流程，TransactionBaseImpl::TryLock通过
+TransactionBaseImpl::TryLock -> PessimisticTransaction::TryLock -> PessimisticTransactionDB::TryLock -> TransactionLockMgr::TryLock一路调用
+到TransactionLockMgr的TryLock，在里面完成对key加锁，加锁成功便实现了对key的独占，此时直到事务commit之前，其他事务是无法修改这个key的。
 
+*/
 Status TransactionBaseImpl::TryLock(ColumnFamilyHandle* column_family,
                                     const SliceParts& key, bool read_only,
                                     bool exclusive, const bool do_validate,
@@ -328,10 +333,16 @@ Status TransactionBaseImpl::Put(ColumnFamilyHandle* column_family,
                                 const Slice& key, const Slice& value,
                                 const bool assume_tracked) {
   const bool do_validate = !assume_tracked;
+  // 调用TryLock抢锁及冲突检测
   Status s = TryLock(column_family, key, false /* read_only */,
                      true /* exclusive */, do_validate, assume_tracked);
 
   if (s.ok()) {
+  	 /*
+   锁是加成功了，但这也只能说明从此刻起到事务结束前这个key不会再被外部修改，但如果事务在最开始执行SetSnapshot设置
+   了快照，如果在打快照和Put之间的过程中外部对相同key进行了修改（并commit），此时已经打破了snapshot的保证，所以事务
+   之后的Put也不能成功，这个冲突检测也是在PessimisticTransaction::TryLock中做的 
+	 */
     s = GetBatchForWrite()->Put(column_family, key, value);
     if (s.ok()) {
       num_puts_++;
