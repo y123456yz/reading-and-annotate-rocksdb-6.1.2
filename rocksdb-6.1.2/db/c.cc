@@ -122,6 +122,7 @@ using std::map;
 
 extern "C" {
 
+//rocksdb_open
 struct rocksdb_t                 { DB*               rep; };
 struct rocksdb_backup_engine_t   { BackupEngine*     rep; };
 struct rocksdb_backup_engine_info_t { std::vector<BackupInfo> rep; };
@@ -138,6 +139,7 @@ struct rocksdb_readoptions_t {
    Slice upper_bound;
    Slice lower_bound;
 };
+//rocksdb_writeoptions_create中构造
 struct rocksdb_writeoptions_t    { WriteOptions      rep; };
 struct rocksdb_options_t         { Options           rep; };
 struct rocksdb_compactoptions_t {
@@ -476,6 +478,7 @@ static char* CopyString(const std::string& str) {
   return result;
 }
 
+//
 rocksdb_t* rocksdb_open(
     const rocksdb_options_t* options,
     const char* name,
@@ -517,6 +520,7 @@ rocksdb_t* rocksdb_open_for_read_only(
   return result;
 }
 
+//path为backup的路径
 rocksdb_backup_engine_t* rocksdb_backup_engine_open(
     const rocksdb_options_t* options, const char* path, char** errptr) {
   BackupEngine* be;
@@ -2072,6 +2076,7 @@ void rocksdb_options_destroy(rocksdb_options_t* options) {
   delete options;
 }
 
+//参考c_simple_example例子
 void rocksdb_options_increase_parallelism(
     rocksdb_options_t* opt, int total_threads) {
   opt->rep.IncreaseParallelism(total_threads);
@@ -2082,6 +2087,7 @@ void rocksdb_options_optimize_for_point_lookup(
   opt->rep.OptimizeForPointLookup(block_cache_size_mb);
 }
 
+//参考c_simple_example例子
 void rocksdb_options_optimize_level_style_compaction(
     rocksdb_options_t* opt, uint64_t memtable_memory_budget) {
   opt->rep.OptimizeLevelStyleCompaction(memtable_memory_budget);

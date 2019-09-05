@@ -1097,6 +1097,7 @@ Status DB::Open(const DBOptions& db_options, const std::string& dbname,
                       !kSeqPerBatch, kBatchPerTxn);
 }
 
+//dbname也就是数据库名，包含路径
 Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
                     const std::vector<ColumnFamilyDescriptor>& column_families,
                     std::vector<ColumnFamilyHandle*>* handles, DB** dbptr,
@@ -1120,7 +1121,11 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
         std::max(max_write_buffer_size, cf.options.write_buffer_size);
   }
 
+  count << "yang test ..############.. :" << dbname;
+  ROCKS_LOG_WARN(immutable_db_options_.info_log, "yang test .... :%s", dbname.c_str());
+  
   DBImpl* impl = new DBImpl(db_options, dbname, seq_per_batch, batch_per_txn);
+  //创建目录
   s = impl->env_->CreateDirIfMissing(impl->immutable_db_options_.wal_dir);
   if (s.ok()) {
     std::vector<std::string> paths;
@@ -1133,6 +1138,7 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
       }
     }
     for (auto& path : paths) {
+	  count << "yang test ..############.. :" << path;
       s = impl->env_->CreateDirIfMissing(path);
       if (!s.ok()) {
         break;

@@ -79,6 +79,7 @@ enum CompressionType : unsigned char {
 struct Options;
 struct DbPath;
 
+//struct Options : public DBOptions, public ColumnFamilyOptions {
 struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   // The function recovers options to a previous version. Only 4.6 or later
   // versions are supported.
@@ -340,6 +341,7 @@ struct DbPath {
   DbPath(const std::string& p, uint64_t t) : path(p), target_size(t) {}
 };
 
+//struct Options : public DBOptions, public ColumnFamilyOptions {}
 struct DBOptions {
   // The function recovers options to the option as in version 4.6.
   DBOptions* OldDefaults(int rocksdb_major_version = 4,
@@ -519,6 +521,7 @@ struct DBOptions {
   // Default: 2
   //
   // Dynamically changeable through SetDBOptions() API.
+  //赋值见DBOptions::IncreaseParallelism
   int max_background_jobs = 2;
 
   // NOT SUPPORTED ANYMORE: RocksDB automatically decides this based on the
@@ -1200,6 +1203,7 @@ struct ReadOptions {
 };
 
 // Options that control write operations
+//rocksdb_writeoptions_t.rep成员
 struct WriteOptions {
   // If true, the write will be flushed from the operating system
   // buffer cache (by calling WritableFile::Sync()) before the write

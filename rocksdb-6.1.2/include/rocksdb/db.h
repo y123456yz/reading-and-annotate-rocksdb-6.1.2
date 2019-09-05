@@ -127,6 +127,7 @@ typedef std::unordered_map<std::string, std::shared_ptr<const TableProperties>>
 // any external synchronization.
 
 //DBImpl 继承该类
+//rocksdb_open中构造使用，存储在rocksdb_t.rep成员中
 class DB {
  public:
   // Open the database with the specified "name".

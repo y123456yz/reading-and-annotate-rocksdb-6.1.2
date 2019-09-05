@@ -335,3 +335,4 @@ class BackupEngine {
 
 }  // namespace rocksdb
 #endif  // ROCKSDB_LITE
+

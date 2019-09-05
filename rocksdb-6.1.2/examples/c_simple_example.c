@@ -23,7 +23,9 @@ int main(int argc, char **argv) {
   rocksdb_options_t *options = rocksdb_options_create();
   // Optimize RocksDB. This is the easiest way to
   // get RocksDB to perform well
+  //获取CPU个数
   long cpus = sysconf(_SC_NPROCESSORS_ONLN);  // get # of online cores
+  //设置后台线程数
   rocksdb_options_increase_parallelism(options, (int)(cpus));
   rocksdb_options_optimize_level_style_compaction(options, 0);
   // create the DB if it's not already present
@@ -79,3 +81,4 @@ int main(int argc, char **argv) {
 
   return 0;
 }
+

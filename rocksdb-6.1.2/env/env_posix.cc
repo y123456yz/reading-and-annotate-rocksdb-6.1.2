@@ -577,6 +577,7 @@ class PosixEnv : public Env {
     return result;
   };
 
+  //创建目录
   Status CreateDirIfMissing(const std::string& name) override {
     Status result;
     if (mkdir(name.c_str(), 0755) != 0) {
@@ -891,6 +892,7 @@ class PosixEnv : public Env {
   }
 
   // Allow increasing the number of worker threads.
+  //BOptions::IncreaseParallelism
   void SetBackgroundThreads(int num, Priority pri) override {
     assert(pri >= Priority::BOTTOM && pri <= Priority::HIGH);
     thread_pools_[pri].SetBackgroundThreads(num);
@@ -1012,6 +1014,7 @@ class PosixEnv : public Env {
   size_t page_size_;
 
   //线程池，任务在PosixEnv::Schedule中入队
+  //赋值可以参考SetBackgroundThreads
   std::vector<ThreadPoolImpl> thread_pools_;
   pthread_mutex_t mu_;
   std::vector<pthread_t> threads_to_join_;
@@ -1132,3 +1135,4 @@ Env* Env::Default() {
 }
 
 }  // namespace rocksdb
+
