@@ -117,7 +117,7 @@ struct EnvOptions {
 考虑到移植以及灵活性，LevelDB将系统相关的处理（文件/进程/时间）抽象成Evn，用户可以自己实现相应的接口，
 作为option的一部分传入，默认使用自带的实现。 
 */ //PosixEnv继承该类，最终赋值给EnvWrapper.target_
-class Env {
+class Env { //真正的线程池实现建继承类PosixEnv      DBImpl.env_
  public:
   struct FileAttributes {
     // File name

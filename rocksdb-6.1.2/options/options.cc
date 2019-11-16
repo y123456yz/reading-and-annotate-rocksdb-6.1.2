@@ -113,6 +113,8 @@ void DBOptions::Dump(Logger* log) const {
     MutableDBOptions(*this).Dump(log);
 }  // DBOptions::Dump
 
+//MutableDBOptions::Dump   ImmutableDBOptions::Dump  DumpSupportInfo  ColumnFamilyOptions::Dump
+
 void ColumnFamilyOptions::Dump(Logger* log) const {
   ROCKS_LOG_HEADER(log, "              Options.comparator: %s",
                    comparator->Name());

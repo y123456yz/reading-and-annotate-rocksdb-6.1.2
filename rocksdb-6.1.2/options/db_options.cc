@@ -90,6 +90,8 @@ ImmutableDBOptions::ImmutableDBOptions(const DBOptions& options)
       avoid_unnecessary_blocking_io(options.avoid_unnecessary_blocking_io) {
 }
 
+//MutableDBOptions::Dump   ImmutableDBOptions::Dump  DumpSupportInfo  ColumnFamilyOptions::Dump
+
 void ImmutableDBOptions::Dump(Logger* log) const {
   ROCKS_LOG_HEADER(log, "                        Options.error_if_exists: %d",
                    error_if_exists);
@@ -225,6 +227,7 @@ void ImmutableDBOptions::Dump(Logger* log) const {
                    avoid_unnecessary_blocking_io);
 }
 
+//MutableDBOptions::Dump   ImmutableDBOptions::Dump  DumpSupportInfo  ColumnFamilyOptions::Dump
 MutableDBOptions::MutableDBOptions()
     : max_background_jobs(2),
       base_background_compactions(-1),

@@ -1040,6 +1040,7 @@ PosixEnv::PosixEnv()
 }
 
 //PosixEnv::Schedule入队 ThreadPoolImpl::Impl::BGThread从队列中取出任务执行
+//例如DBImpl::MaybeScheduleFlushOrCompaction->env_->Schedule()
 void PosixEnv::Schedule(void (*function)(void* arg1), void* arg, Priority pri,
                         void* tag, void (*unschedFunction)(void* arg)) {
   assert(pri >= Priority::BOTTOM && pri <= Priority::HIGH);

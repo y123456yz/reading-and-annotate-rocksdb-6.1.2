@@ -59,6 +59,7 @@ class CompactionJobInfo;
 #endif
 
 extern const std::string kDefaultColumnFamilyName;
+//ColumnFamilyHandle和ColumnFamilyDescriptor在DB::Open关联
 struct ColumnFamilyDescriptor {
   std::string name;
   ColumnFamilyOptions options;
@@ -69,7 +70,7 @@ struct ColumnFamilyDescriptor {
       : name(_name), options(_options) {}
 };
 
-//ColumnFamilyHandleImpl继承该类
+//ColumnFamilyHandleImpl继承该类     ColumnFamilyHandle和ColumnFamilyDescriptor在DB::Open关联
 class ColumnFamilyHandle {
  public:
   virtual ~ColumnFamilyHandle() {}
@@ -127,7 +128,7 @@ typedef std::unordered_map<std::string, std::shared_ptr<const TableProperties>>
 // any external synchronization.
 
 //DBImpl 继承该类
-//rocksdb_open中构造使用，存储在rocksdb_t.rep成员中
+//rocksdb_open中构造使用，存储在rocksdb_t.rep成员中，真正赋值建DBImpl::Open
 class DB {
  public:
   // Open the database with the specified "name".

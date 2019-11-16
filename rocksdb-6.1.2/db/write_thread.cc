@@ -451,7 +451,7 @@ void WriteThread::JoinBatchGroup(Writer* w) {
   }
 }
 
-//DBImpl::PipelinedWriteImpl
+//DBImpl::PipelinedWriteImpl   DBImpl::WriteImpl
 //把此leader下的所有的write都链接到一个WriteGroup中(调用EnterAsBatchGroupLeader函数),　并开始写入WAL
 //由leader线程构造一个WriteGroup对象的实例，WriteGroup对象的实例用于描述当作Group Commit要写入WAL的所有内容。
 size_t WriteThread::EnterAsBatchGroupLeader(Writer* leader,
@@ -853,3 +853,4 @@ void WriteThread::WaitForMemTableWriters() {
 }
 
 }  // namespace rocksdb
+

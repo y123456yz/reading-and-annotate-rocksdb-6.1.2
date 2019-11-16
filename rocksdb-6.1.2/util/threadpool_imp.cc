@@ -134,6 +134,8 @@ private:
   std::mutex               mu_;
   //条件变量，队列空了就进入等待，直至有新的任务加入进来
   std::condition_variable  bgsignal_;
+
+  //真正的线程池
   std::vector<port::Thread> bgthreads_;
 };
 

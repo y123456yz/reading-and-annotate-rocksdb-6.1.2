@@ -22,6 +22,9 @@
 #include "util/sst_file_manager_impl.h"
 #include "util/sync_point.h"
 
+#include <iostream>
+
+
 namespace rocksdb {
 Options SanitizeOptions(const std::string& dbname, const Options& src) {
   auto db_options = SanitizeOptions(dbname, DBOptions(src));
@@ -145,7 +148,7 @@ DBOptions SanitizeOptions(const std::string& dbname, const DBOptions& src) {
 }
 
 namespace {
-
+//参考DBImpl::Open
 Status SanitizeOptionsByTable(
     const DBOptions& db_opts,
     const std::vector<ColumnFamilyDescriptor>& column_families) {
@@ -159,6 +162,7 @@ Status SanitizeOptionsByTable(
   return Status::OK();
 }
 
+//DBImpl::Open
 static Status ValidateOptions(
     const DBOptions& db_options,
     const std::vector<ColumnFamilyDescriptor>& column_families) {
@@ -1071,6 +1075,7 @@ Status DBImpl::WriteLevel0TableForRecovery(int job_id, ColumnFamilyData* cfd,
   return s;
 }
 
+//dbname对接文件存放路径
 Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr) {
   DBOptions db_options(options);
   ColumnFamilyOptions cf_options(options);
@@ -1097,7 +1102,7 @@ Status DB::Open(const DBOptions& db_options, const std::string& dbname,
                       !kSeqPerBatch, kBatchPerTxn);
 }
 
-//dbname也就是数据库名，包含路径
+//dbname也就是路径  DB::Open
 Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
                     const std::vector<ColumnFamilyDescriptor>& column_families,
                     std::vector<ColumnFamilyHandle*>* handles, DB** dbptr,
@@ -1121,8 +1126,11 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
         std::max(max_write_buffer_size, cf.options.write_buffer_size);
   }
 
-  count << "yang test ..############.. :" << dbname;
-  ROCKS_LOG_WARN(immutable_db_options_.info_log, "yang test .... :%s", dbname.c_str());
+
+  
+	using std::cout;
+	using std::endl;
+  cout << "yang test ..############.. :" << dbname << endl;
   
   DBImpl* impl = new DBImpl(db_options, dbname, seq_per_batch, batch_per_txn);
   //创建目录
@@ -1138,7 +1146,7 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
       }
     }
     for (auto& path : paths) {
-	  count << "yang test ..############.. :" << path;
+	  //std::cout << "yang test ..############.. :" << path;     yang test ..############.. :./test/rocksdb_simple_example
       s = impl->env_->CreateDirIfMissing(path);
       if (!s.ok()) {
         break;
@@ -1166,7 +1174,7 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
   auto write_hint = impl->CalculateWALWriteHint();
   // Handles create_if_missing, error_if_exists
   //锁定并试图做Recover操作。Recover操作用来处理创建flag，比如存在就返回失败等等，尝试从已存在的sstable文件恢复db
-  s = impl->Recover(column_families);
+  s = impl->Recover(column_families); //DBImpl::Recover
   if (s.ok()) {
   	//如果Recover返回成功，则调用VersionSet取得新的log文件编号--实际上是在当前基础上+1，
   	//准备新的log文件。如果log文件创建成功，则根据log文件创建log::Writer。然后执行

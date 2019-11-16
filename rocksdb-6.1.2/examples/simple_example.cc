@@ -12,8 +12,9 @@
 
 using namespace rocksdb;
 
-std::string kDBPath = "/tmp/rocksdb_simple_example";
+std::string kDBPath = "./test/rocksdb_simple_example";
 
+//https://leveldb-handbook.readthedocs.io/zh/latest/basic.html 概念简单学习
 int main() {
   DB* db;
   Options options;
@@ -24,10 +25,10 @@ int main() {
   options.create_if_missing = true;
 
   // open DB
-  Status s = DB::Open(options, kDBPath, &db);
+  Status s = DB::Open(options, kDBPath, &db); //db对应DBImpl
   assert(s.ok());
 
-  // Put key-value
+  // Put key-value  DBImpl::put
   s = db->Put(WriteOptions(), "key1", "value");
   assert(s.ok());
   std::string value;
@@ -81,3 +82,4 @@ int main() {
 
   return 0;
 }
+

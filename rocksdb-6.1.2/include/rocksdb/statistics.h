@@ -462,6 +462,7 @@ enum StatsLevel : uint8_t {
 };
 
 // Analyze the performance of a db
+//DBImpl.stats_
 class Statistics {
  public:
   virtual ~Statistics() {}

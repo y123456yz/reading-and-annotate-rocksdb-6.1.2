@@ -122,6 +122,8 @@ CompressionType GetCompressionFlush(
   }
 }
 
+//MutableDBOptions::Dump   ImmutableDBOptions::Dump  DumpSupportInfo  ColumnFamilyOptions::Dump
+
 namespace {
 void DumpSupportInfo(Logger* logger) {
   ROCKS_LOG_HEADER(logger, "Compression algorithms supported:");
@@ -1050,6 +1052,7 @@ Status DBImpl::FlushWAL(bool sync) {
   return SyncWAL();
 }
 
+//真正的flush刷盘 DBImpl::SyncWAL
 Status DBImpl::SyncWAL() {
   autovector<log::Writer*, 1> logs_to_sync;
   bool need_log_dir_sync;
@@ -1131,6 +1134,7 @@ Status DBImpl::UnlockWAL() {
   return Status::OK();
 }
 
+//DBImpl::PipelinedWriteImpl
 void DBImpl::MarkLogsSynced(uint64_t up_to, bool synced_dir,
                             const Status& status) {
   mutex_.AssertHeld();
@@ -1152,7 +1156,7 @@ void DBImpl::MarkLogsSynced(uint64_t up_to, bool synced_dir,
   }
   assert(!status.ok() || logs_.empty() || logs_[0].number > up_to ||
          (logs_.size() == 1 && !logs_[0].getting_synced));
-  log_sync_cv_.SignalAll();
+  log_sync_cv_.SignalAll();  //真正的flush刷盘 DBImpl::SyncWAL
 }
 
 SequenceNumber DBImpl::GetLatestSequenceNumber() const {

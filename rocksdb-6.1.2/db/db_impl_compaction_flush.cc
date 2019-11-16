@@ -130,6 +130,11 @@ Status DBImpl::SyncClosedLogs(JobContext* job_context) {
 }
 
 //FlushMemTableToOutputFile来刷新Memtable到磁盘
+
+//DBImpl::MaybeScheduleFlushOrCompaction->DBImpl::BGWorkFlush->DBImpl::BackgroundCallFlush->DBImpl::BackgroundFlush->FlushMemTablesToOutputFiles->DBImpl::FlushMemTableToOutputFile->
+//	FlushJob::run->FlushJob::WriteLevel0Table
+
+//DBImpl::FlushMemTablesToOutputFiles
 Status DBImpl::FlushMemTableToOutputFile(
     ColumnFamilyData* cfd, const MutableCFOptions& mutable_cf_options,
     bool* made_progress, JobContext* job_context,
@@ -232,6 +237,11 @@ Status DBImpl::FlushMemTableToOutputFile(
   return s;
 }
 
+//DBImpl::MaybeScheduleFlushOrCompaction->DBImpl::BGWorkFlush->DBImpl::BackgroundCallFlush->DBImpl::BackgroundFlush->FlushMemTablesToOutputFiles->DBImpl::FlushMemTableToOutputFile->
+//	FlushJob::run->FlushJob::WriteLevel0Table
+
+
+//DBImpl::BackgroundFlush
 Status DBImpl::FlushMemTablesToOutputFiles(
     const autovector<BGFlushArg>& bg_flush_args, bool* made_progress,
     JobContext* job_context, LogBuffer* log_buffer, Env::Priority thread_pri) {
@@ -274,6 +284,7 @@ Status DBImpl::FlushMemTablesToOutputFiles(
  * column families are not flushed successfully, this function does not have
  * any side-effect on the state of the database.
  */
+//DBImpl::FlushMemTablesToOutputFiles
 Status DBImpl::AtomicFlushMemTablesToOutputFiles(
     const autovector<BGFlushArg>& bg_flush_args, bool* made_progress,
     JobContext* job_context, LogBuffer* log_buffer, Env::Priority thread_pri) {
@@ -1799,6 +1810,7 @@ void DBImpl::MaybeScheduleFlushOrCompaction() {
     FlushThreadArg* fta = new FlushThreadArg;
     fta->db_ = this;
     fta->thread_pri_ = Env::Priority::HIGH;
+	//PosixEnv::Schedule
     env_->Schedule(&DBImpl::BGWorkFlush, fta, Env::Priority::HIGH, this,
                    &DBImpl::UnscheduleFlushCallback);
   }
@@ -1962,6 +1974,10 @@ void DBImpl::SchedulePendingPurge(std::string fname, std::string dir_to_sync,
   purge_queue_.push_back(std::move(file_info));
 }
 
+//DBImpl::MaybeScheduleFlushOrCompaction
+
+//DBImpl::MaybeScheduleFlushOrCompaction->DBImpl::BGWorkFlush->DBImpl::BackgroundCallFlush->DBImpl::BackgroundFlush->FlushMemTablesToOutputFiles->DBImpl::FlushMemTableToOutputFile->
+//	FlushJob::run->FlushJob::WriteLevel0Table
 void DBImpl::BGWorkFlush(void* arg) {
   FlushThreadArg fta = *(reinterpret_cast<FlushThreadArg*>(arg));
   delete reinterpret_cast<FlushThreadArg*>(arg);
@@ -2026,6 +2042,10 @@ void DBImpl::UnscheduleFlushCallback(void* arg) {
 //刷新MemTable到磁盘是一个后台线程来做的，这个后台线程叫做BGWorkFlush，最终这个
 //函数会调用BackgroundFlush函数，而BackgroundFlush主要功能是在flush_queue_中找到
 //一个ColumnFamily然后刷新它的memtable到磁盘.
+
+//DBImpl::MaybeScheduleFlushOrCompaction->DBImpl::BGWorkFlush->DBImpl::BackgroundCallFlush->DBImpl::BackgroundFlush->FlushMemTablesToOutputFiles->DBImpl::FlushMemTableToOutputFile->
+//	FlushJob::run->FlushJob::WriteLevel0Table
+
 Status DBImpl::BackgroundFlush(bool* made_progress, JobContext* job_context,
                                LogBuffer* log_buffer, FlushReason* reason,
                                Env::Priority thread_pri) {
@@ -2104,6 +2124,9 @@ Status DBImpl::BackgroundFlush(bool* made_progress, JobContext* job_context,
   return status;
 }
 
+//Flush触发流程 参考https://www.jianshu.com/p/38a38134491b
+//DBImpl::MaybeScheduleFlushOrCompaction->DBImpl::BGWorkFlush->DBImpl::BackgroundCallFlush->DBImpl::BackgroundFlush->FlushMemTablesToOutputFiles->DBImpl::FlushMemTableToOutputFile->
+//	FlushJob::run->FlushJob::WriteLevel0Table
 void DBImpl::BackgroundCallFlush(Env::Priority thread_pri) {
   bool made_progress = false;
   JobContext job_context(next_job_id_.fetch_add(1), true);

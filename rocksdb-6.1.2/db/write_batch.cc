@@ -607,6 +607,7 @@ int WriteBatchInternal::Count(const WriteBatch* b) {
   return DecodeFixed32(b->rep_.data() + 8);
 }
 
+//WriteBatchInternal::Put
 void WriteBatchInternal::SetCount(WriteBatch* b, int n) {
   EncodeFixed32(&b->rep_[8], n);
 }
@@ -623,7 +624,17 @@ size_t WriteBatchInternal::GetFirstOffset(WriteBatch* /*b*/) {
   return WriteBatchInternal::kHeader;
 }
 
-//WriteBatch::Put
+/*
+RocksDB的写入过程分成以下三步：
+1.将一条或者多条操作的记录封装到WriteBatch
+2.将记录对应的日志写到WAL文件中
+3.将WriteBatch中的一条或者多条记录写到内存中的memtable中
+
+  其中，每个WriteBatch代表一个事务，可以包含多条操作，可以通过调用WriteBatch::Put/Delete等操作
+将对应多条的key/value记录加入WriteBatch中。
+*/
+
+//WriteBatch::Put WriteBatch::Put   key-value填充到WriteBatch
 Status WriteBatchInternal::Put(WriteBatch* b, uint32_t column_family_id,
                                const Slice& key, const Slice& value) {
   if (key.size() > size_t{port::kMaxUint32}) {
@@ -635,6 +646,7 @@ Status WriteBatchInternal::Put(WriteBatch* b, uint32_t column_family_id,
 
   LocalSavePoint save(b);
   WriteBatchInternal::SetCount(b, WriteBatchInternal::Count(b) + 1);
+  //填充类型
   if (column_family_id == 0) {
     b->rep_.push_back(static_cast<char>(kTypeValue));
   } else {
@@ -649,6 +661,15 @@ Status WriteBatchInternal::Put(WriteBatch* b, uint32_t column_family_id,
   return save.commit();
 }
 
+/*
+RocksDB的写入过程分成以下三步：
+1.将一条或者多条操作的记录封装到WriteBatch
+2.将记录对应的日志写到WAL文件中
+3.将WriteBatch中的一条或者多条记录写到内存中的memtable中
+
+  其中，每个WriteBatch代表一个事务，可以包含多条操作，可以通过调用WriteBatch::Put/Delete等操作
+将对应多条的key/value记录加入WriteBatch中。
+*/
 //DB::Put
 Status WriteBatch::Put(ColumnFamilyHandle* column_family, const Slice& key,
                        const Slice& value) {

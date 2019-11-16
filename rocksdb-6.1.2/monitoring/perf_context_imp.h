@@ -31,6 +31,8 @@ extern thread_local PerfContext perf_context;
 
 #else
 
+//下面的各种统计结果获取见rocksdb_perfcontext_metric
+
 // Stop the timer and update the metric
 #define PERF_TIMER_STOP(metric) perf_step_timer_##metric.Stop();
 

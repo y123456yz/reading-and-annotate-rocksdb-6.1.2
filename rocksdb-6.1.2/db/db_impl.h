@@ -75,6 +75,7 @@ struct JobContext;
 struct ExternalSstFileInfo;
 struct MemTableInfo;
 
+//DBImpl::Open中构造使用
 class DBImpl : public DB {
  public:
   DBImpl(const DBOptions& options, const std::string& dbname,
@@ -743,8 +744,8 @@ class DBImpl : public DB {
                        std::map<std::string, uint64_t>* stats_map);
 
  protected:
-  // 环境，封装了系统相关的文件操作、线程等等  
-  Env* const env_;
+  // 环境，封装了系统相关的文件操作、线程等等，其中线程通过env_->GetBackgroundThreads获取
+  Env* const env_; //DBImpl.env_
   const std::string dbname_;
   // 多版本DB文件
   std::unique_ptr<VersionSet> versions_;
@@ -753,7 +754,7 @@ class DBImpl : public DB {
   const DBOptions initial_db_options_;
   const ImmutableDBOptions immutable_db_options_;
   MutableDBOptions mutable_db_options_;
-  Statistics* stats_;
+  Statistics* stats_; 
   std::unordered_map<std::string, RecoveredTransaction*>
       recovered_transactions_;
   std::unique_ptr<Tracer> tracer_;
@@ -1332,6 +1333,7 @@ class DBImpl : public DB {
   //个则是包括了所有的WAL(比如open一个DB,而没有写入数据，此时也会生成WAL).
   std::deque<LogWriterNumber> logs_;
   // Signaled when getting_synced becomes false for some of the logs_.
+  //见DBImpl::MarkLogsSynced   //真正的flush刷盘 DBImpl::SyncWAL
   InstrumentedCondVar log_sync_cv_;
   // This is the app-level state that is written to the WAL but will be used
   // only during recovery. Using this feature enables not writing the state to
@@ -1401,6 +1403,7 @@ class DBImpl : public DB {
   // to the WAL its size need not to be included in this.
   uint64_t last_batch_group_size_;
 
+  //是否有已经满掉的memtable需要刷新到磁盘
   FlushScheduler flush_scheduler_;
 
   SnapshotList snapshots_;

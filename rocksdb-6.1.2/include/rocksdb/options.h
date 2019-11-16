@@ -80,6 +80,7 @@ struct Options;
 struct DbPath;
 
 //struct Options : public DBOptions, public ColumnFamilyOptions {
+//ColumnFamilyDescriptor.options成员
 struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   // The function recovers options to a previous version. Only 4.6 or later
   // versions are supported.
@@ -1221,7 +1222,7 @@ struct WriteOptions {
   // system call followed by "fdatasync()".
   //
   // Default: false
-  //是否需要同步
+  //是否需要同步 写wal是否需要立刻flush
   bool sync;
 
   // If true, writes will not first go to the write ahead log,

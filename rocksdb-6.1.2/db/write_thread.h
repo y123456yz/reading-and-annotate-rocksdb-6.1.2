@@ -26,11 +26,12 @@
 
 namespace rocksdb {
 
-//DBImpl.write_thread_
+//DBImpl.write_thread_                   真正的线程在DBImpl.env_
 class WriteThread {
  public:
   //状态转换图可以参考https://cloud.tencent.com/developer/article/1143439
-  enum State : uint8_t {
+  //enum State : uint8_t {
+  enum State {
     // The initial state of a writer.  This is a Writer that is
     // waiting in JoinBatchGroup.  This state can be left when another
     // thread informs the waiter that it has become a group leader
@@ -76,8 +77,8 @@ class WriteThread {
 
   struct Writer;
 
-  //WriteThread::EnterAsBatchGroupLeader中使用
-  struct WriteGroup {
+
+  struct WriteGroup {//Write和WriteGroup通过WriteThread::EnterAsBatchGroupLeader关联
     //当写线程要提交事务时会将自己对应的Write实例添加到Write链表的尾部。
     //此时存在一种特殊情况，即当前待提交的线程是加入Write链表的第一个线程。
     //在RocksDB的逻辑中，第一个加入链表的线程将成为leader线程。
@@ -123,7 +124,7 @@ class WriteThread {
   //DBImpl::PipelinedWriteImpl
   struct Writer {
     //每个写线程都会生成一个WriteThread::Write的实例，关联到对应的一个WriteBatch。
-    WriteBatch* batch;
+    WriteBatch* batch; 
     bool sync;
     bool no_slowdown;
     bool disable_wal;
@@ -357,6 +358,7 @@ class WriteThread {
   // write is enabled.
   void WaitForMemTableWriters();
 
+  //DBImpl::PipelinedWriteImpl
   SequenceNumber UpdateLastSequence(SequenceNumber sequence) {
     if (sequence > last_sequence_) {
       last_sequence_ = sequence;
@@ -394,6 +396,7 @@ class WriteThread {
 
   // The last sequence that have been consumed by a writer. The sequence
   // is not necessary visible to reads because the writer can be ongoing.
+  //赋值见UpdateLastSequence
   SequenceNumber last_sequence_;
 
   // A dummy writer to indicate a write stall condition. This will be inserted

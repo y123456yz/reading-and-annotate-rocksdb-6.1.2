@@ -51,7 +51,7 @@ void DBImpl::SetRecoverableStatePreReleaseCallback(
   recoverable_state_pre_release_callback_.reset(callback);
 }
 
-//DB::Put
+//DB::Put  
 Status DBImpl::Write(const WriteOptions& write_options, WriteBatch* my_batch) {
   return WriteImpl(write_options, my_batch, nullptr, nullptr);
 }
@@ -74,7 +74,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
                          uint64_t* log_used, uint64_t log_ref,
                          bool disable_memtable, uint64_t* seq_used,
                          size_t batch_cnt,
-                         PreReleaseCallback* pre_release_callback) {
+                         PreReleaseCallback* pre_release_callback) { //后几个参数的默认只见db_impl.h，默认都是null
   assert(!seq_per_batch_ || batch_cnt != 0);
   if (my_batch == nullptr) {
     return Status::Corruption("Batch is nullptr!");
@@ -109,7 +109,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
     }
   }
 
-  if (two_write_queues_ && disable_memtable) {
+  if (two_write_queues_ && disable_memtable) { //只记录WAL日志
     return WriteImplWALOnly(write_options, my_batch, callback, log_used,
                             log_ref, seq_used, batch_cnt, pre_release_callback);
   }
@@ -121,6 +121,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
   }
 
   PERF_TIMER_GUARD(write_pre_and_post_process_time);
+  //构造一个Writer
   WriteThread::Writer w(write_options, my_batch, callback, log_ref,
                         disable_memtable, batch_cnt, pre_release_callback);
 
@@ -205,8 +206,9 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
     // with the other thread
 
     // PreprocessWrite does its own perf timing.
-    PERF_TIMER_STOP(write_pre_and_post_process_time);
-
+    PERF_TIMER_STOP(write_pre_and_post_process_time);  //perf_step_timer_write_pre_and_post_process_timemetric.Stop()
+    //这个函数的调用是在写WAL之前，也就是每次写WAL都会进行这个判断.
+    //写memtable在这里面
     status = PreprocessWrite(write_options, &need_log_sync, &write_context);
 
     PERF_TIMER_START(write_pre_and_post_process_time);
@@ -292,6 +294,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
     if (!two_write_queues_) {
       if (status.ok() && !write_options.disableWAL) {
         PERF_TIMER_GUARD(write_wal_time);
+		//写WAL日志在这里
         status = WriteToWAL(write_group, log_writer, log_used, need_log_sync,
                             need_log_dir_sync, last_sequence + 1);
       }
@@ -417,6 +420,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
 }
 
 //可以参考http://mysql.taobao.org/monthly/2018/07/04/
+//DBImpl::WriteImpl
 Status DBImpl::PipelinedWriteImpl(const WriteOptions& write_options,
                                   WriteBatch* my_batch, WriteCallback* callback,
                                   uint64_t* log_used, uint64_t log_ref,
@@ -478,6 +482,7 @@ Status DBImpl::PipelinedWriteImpl(const WriteOptions& write_options,
       write_thread_.UpdateLastSequence(current_sequence + total_count - 1);
     }
 
+	//统计赋值
     auto stats = default_cf_internal_stats_;
     stats->AddDBStats(InternalStats::NUMBER_KEYS_WRITTEN, total_count);
     RecordTick(stats_, NUMBER_KEYS_WRITTEN, total_count);
@@ -505,7 +510,7 @@ Status DBImpl::PipelinedWriteImpl(const WriteOptions& write_options,
       WriteStatusCheck(w.status);
     }
 
-    if (need_log_sync) {
+    if (need_log_sync) { //刷盘
       mutex_.Lock();
       MarkLogsSynced(logfile_number_, need_log_dir_sync, w.status);
       mutex_.Unlock();
@@ -518,9 +523,11 @@ Status DBImpl::PipelinedWriteImpl(const WriteOptions& write_options,
   if (w.state == WriteThread::STATE_MEMTABLE_WRITER_LEADER) {
     PERF_TIMER_GUARD(write_memtable_time);
     assert(w.ShouldWriteToMemtable());
+	//w和memtable_write_group关联
     write_thread_.EnterAsMemTableWriter(&w, &memtable_write_group);
     if (memtable_write_group.size > 1 &&
         immutable_db_options_.allow_concurrent_memtable_write) {
+      //通知所有的follower线程并发写memtable。 
       write_thread_.LaunchParallelMemTableWriters(&memtable_write_group);
     } else {
       memtable_write_group.status = WriteBatchInternal::InsertInto(
@@ -716,7 +723,7 @@ void DBImpl::MemTableInsertStatusCheck(const Status& status) {
   }
 }
 
-//这个函数的调用是在是在写WAL之前，也就是每次写WAL都会进行这个判断.
+//这个函数的调用是在写WAL之前，也就是每次写WAL都会进行这个判断.
 Status DBImpl::PreprocessWrite(const WriteOptions& write_options,
                                bool* need_log_sync,
                                WriteContext* write_context) {
@@ -745,6 +752,7 @@ Status DBImpl::PreprocessWrite(const WriteOptions& write_options,
     // thread is writing to another DB with the same write buffer, they may also
     // be flushed. We may end up with flushing much more DBs than needed. It's
     // suboptimal but still correct.
+
     status = HandleWriteBufferFull(write_context);
   }
 
@@ -1633,12 +1641,12 @@ Status DB::Put(const WriteOptions& opt, ColumnFamilyHandle* column_family,
   // 8 bytes are taken by header, 4 bytes for count, 1 byte for type,
   // and we allocate 11 extra bytes for key length, as well as value length.
   WriteBatch batch(key.size() + value.size() + 24);//设置Batch
-  //WriteBatch::put
+  //WriteBatch::put 填充key-value到WriteBatch
   Status s = batch.Put(column_family, key, value);
   if (!s.ok()) {
     return s;
   }
-  //写Batch
+  //写Batch  DBImpl::Write
   return Write(opt, &batch);
 }
 

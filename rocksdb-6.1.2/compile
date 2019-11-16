@@ -1,0 +1,1 @@
+USE_RTTI=1 CFLAGS=-fPIC CFLAGS=-fPIC CXXFLAGS=-fPIC make static_lib;

@@ -53,7 +53,7 @@ class Status {
 
   enum Code : unsigned char {
     kOk = 0,
-    kNotFound = 1,
+    kNotFound = 1,  //不存在，没找到
     kCorruption = 2,
     kNotSupported = 3,
     kInvalidArgument = 4,

@@ -19,7 +19,10 @@
 #include "util/filename.h"
 
 namespace rocksdb {
-
+/*
+[root@localhost rocksdb_simple_example]# ls
+000003.log  CURRENT  IDENTITY  LOCK  LOG  MANIFEST-000001  OPTIONS-000005
+*/
 void DumpDBFileSummary(const ImmutableDBOptions& options,
                        const std::string& dbname) {
   if (options.info_log == nullptr) {
@@ -37,7 +40,7 @@ void DumpDBFileSummary(const ImmutableDBOptions& options,
 
   Header(options.info_log, "DB SUMMARY\n");
   // Get files in dbname dir
-  if (!env->GetChildren(dbname, &files).ok()) {
+  if (!env->GetChildren(dbname, &files).ok()) { //获取路径下的所有文件列表
     Error(options.info_log,
           "Error when reading %s dir\n", dbname.c_str());
   }

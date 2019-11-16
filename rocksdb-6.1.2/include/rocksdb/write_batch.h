@@ -66,7 +66,7 @@ RocksDB的写入过程分成以下三步：
   其中，每个WriteBatch代表一个事务，可以包含多条操作，可以通过调用WriteBatch::Put/Delete等操作
 将对应多条的key/value记录加入WriteBatch中。
 */
-//初始化赋值可以参考DB::Put
+//初始化赋值可以参考DB::Put        //Writer.batch
 class WriteBatch : public WriteBatchBase {
  public:
   explicit WriteBatch(size_t reserved_bytes = 0, size_t max_bytes = 0);
@@ -370,10 +370,11 @@ class WriteBatch : public WriteBatchBase {
   bool is_latest_persistent_state_ = false;
 
  protected:
-  //内容在这里
+  //内容在这里  内容填充见WriteBatchInternal::Put        内容长度见WriteBatchInternal::ByteSize
   std::string rep_;  // See comment in write_batch.cc for the format of rep_
 
   // Intentionally copyable
 };
 
 }  // namespace rocksdb
+
