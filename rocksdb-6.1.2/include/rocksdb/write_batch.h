@@ -65,7 +65,11 @@ RocksDB的写入过程分成以下三步：
 
   其中，每个WriteBatch代表一个事务，可以包含多条操作，可以通过调用WriteBatch::Put/Delete等操作
 将对应多条的key/value记录加入WriteBatch中。
+参考https://cloud.tencent.com/developer/article/1143439
 */
+//一个WriteThread::Writer代表一个写线程，和一个WriteBatch(代表这个线程要写的数据)关联，多个线程同时写，就会有多个线程同时走到该函数中，
+//生成多个一个WriteThread::Writer,这多个WriteThread::Writer通过JoinBatchGroup组织成链表结构，参考DBImpl::WriteImpl
+
 //初始化赋值可以参考DB::Put        //Writer.batch
 class WriteBatch : public WriteBatchBase {
  public:
@@ -182,7 +186,10 @@ class WriteBatch : public WriteBatchBase {
   Status PopSavePoint() override;
 
   // Support for iterating over the contents of a batch.
-  class Handler {
+  class test {
+
+  };
+  class Handler { //memtable对应MemTableInserter
    public:
     virtual ~Handler();
     // All handler functions in this class provide default implementations so
@@ -283,7 +290,7 @@ class WriteBatch : public WriteBatchBase {
     virtual bool WriteAfterCommit() const { return true; }
     virtual bool WriteBeforePrepare() const { return false; }
   };
-  Status Iterate(Handler* handler) const;
+  Status Iterate(Handler* handler) const; //WriteBatch::Iterate
 
   // Retrieve the serialized version of this batch.
   const std::string& Data() const { return rep_; }

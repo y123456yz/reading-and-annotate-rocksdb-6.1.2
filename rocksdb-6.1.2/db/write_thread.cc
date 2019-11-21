@@ -412,6 +412,11 @@ void WriteThread::EndWriteStall() {
 
 //DBImpl::PipelinedWriteImpl
 static WriteThread::AdaptationContext jbg_ctx("JoinBatchGroup");
+
+//一个WriteThread::Writer代表一个写线程，和一个WriteBatch(代表这个线程要写的数据)关联，多个线程同时写，就会有多个线程同时走到该函数中，
+//生成多个一个WriteThread::Writer,这多个WriteThread::Writer通过JoinBatchGroup组织成链表结构，参考DBImpl::WriteImpl
+
+
 //这个函数主要是用来将所有的写入WAL加入到一个Group中.这里可以看到当当前的Writer 
 //对象是leader(比如第一个进入的对象)的时候将会直接返回，否则将会等待知道更新为对应的状态．
 void WriteThread::JoinBatchGroup(Writer* w) {
@@ -454,8 +459,10 @@ void WriteThread::JoinBatchGroup(Writer* w) {
 //DBImpl::PipelinedWriteImpl   DBImpl::WriteImpl
 //把此leader下的所有的write都链接到一个WriteGroup中(调用EnterAsBatchGroupLeader函数),　并开始写入WAL
 //由leader线程构造一个WriteGroup对象的实例，WriteGroup对象的实例用于描述当作Group Commit要写入WAL的所有内容。
+
+//获取该leader及其下面所有follower的Writer对应的WriteBatch数据总长度
 size_t WriteThread::EnterAsBatchGroupLeader(Writer* leader,
-                                            WriteGroup* write_group) {
+                                            WriteGroup* write_group) { 
   assert(leader->link_older == nullptr);
   assert(leader->batch != nullptr);
   assert(write_group != nullptr);
@@ -631,7 +638,7 @@ void WriteThread::ExitAsMemTableWriter(Writer* /*self*/,
   SetState(leader, STATE_COMPLETED);
 }
 
-//leader线程将通过调用LaunchParallelMemTableWriter函数通知所有的follower线程并发写memtable。
+//leader线程将通过调用LaunchParallelMemTableWriters函数通知所有的follower线程并发写memtable。
 void WriteThread::LaunchParallelMemTableWriters(WriteGroup* write_group) {
   assert(write_group != nullptr);
   write_group->running.store(write_group->size);

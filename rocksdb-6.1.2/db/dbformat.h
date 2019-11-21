@@ -25,14 +25,19 @@
 
 namespace rocksdb {
 
-class InternalKey;
 
 // Value types encoded as the last component of internal keys.
 // DO NOT CHANGE THESE ENUM VALUES: they are embedded in the on-disk
 // data structures.
 // The highest bit of the value type needs to be reserved to SST tables
 // for them to do more flexible encoding.
-enum ValueType : unsigned char {
+/*
+插入数据时：type（kTypeValue、kTypeDeletion），Key_size，Key，Value_size，Value
+删除数据时：type（kTypeValue、kTypeDeletion），Key_size，Key
+*/
+//参考ReadRecordFromWriteBatch
+//enum ValueType : unsigned char {
+  enum ValueType {
   kTypeDeletion = 0x0,
   //value就表示是插入
   kTypeValue = 0x1,
@@ -63,6 +68,9 @@ enum ValueType : unsigned char {
   kTypeBeginUnprepareXID = 0x13,  // WAL only.
   kMaxValue = 0x7F                // Not used for storing records.
 };
+
+class InternalKey;
+
 
 // Defined in dbformat.cc
 extern const ValueType kValueTypeForSeek;

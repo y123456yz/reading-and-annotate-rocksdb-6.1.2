@@ -67,6 +67,13 @@ Status DBImpl::WriteWithCallback(const WriteOptions& write_options,
 // The main write queue. This is the only write queue that updates LastSequence.
 // When using one write queue, the same sequence also indicates the last
 // published sequence.
+
+/*
+在RocksDB中，每次写入它都会先写WAL,然后再写入MemTable,这次我们就来分析这两个逻辑具体是如何实现的. 
+首先需要明确的是在RocksDB中，WAL的写入是单线程顺序串行写入的，而MemTable则是可以并发多线程写入的。
+
+参考下https://cloud.tencent.com/developer/article/1143439
+*/
 //DBImpl::Write
 //写入实现在这里
 Status DBImpl::WriteImpl(const WriteOptions& write_options,
@@ -121,7 +128,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
   }
 
   PERF_TIMER_GUARD(write_pre_and_post_process_time);
-  //构造一个Writer
+  //构造一个Writer  每个写线程都会生成一个WriteThread::Write的实例，关联到对应的一个WriteBatch。
   WriteThread::Writer w(write_options, my_batch, callback, log_ref,
                         disable_memtable, batch_cnt, pre_release_callback);
 
@@ -140,6 +147,8 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
   // 因为它已经被别的线程加入BatchGroup准备写入数据库了。
 
   //将要带有要写的batch的Write加入写的队列当中
+  //一个WriteThread::Writer代表一个写线程，和一个WriteBatch(代表这个线程要写的数据)关联，多个线程同时写，就会有多个线程同时走到该函数中，
+  //生成多个一个WriteThread::Writer,这多个WriteThread::Writer通过JoinBatchGroup组织成链表结构，所有线程共用一个全局的write_thread_
   write_thread_.JoinBatchGroup(&w);
   if (w.state == WriteThread::STATE_PARALLEL_MEMTABLE_WRITER) {
     // we are a non-leader in a parallel group
@@ -223,6 +232,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
   // into memtables
 
   TEST_SYNC_POINT("DBImpl::WriteImpl:BeforeLeaderEnters");
+  //获取该leader及其下面所有follower的Writer对应的WriteBatch数据总长度
   last_batch_group_size_ =
       write_thread_.EnterAsBatchGroupLeader(&w, &write_group);
 
@@ -238,19 +248,22 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
     // assumed to be true.  Rule 3 is checked for each batch.  We could
     // relax rules 2 if we could prevent write batches from referring
     // more than once to a particular key.
+    //说明有多个write线程同时属于该group组
+    //检查是否可以并发写入memtable，条件有：1. memtable本身支持；2. 没有merge操作 
     bool parallel = immutable_db_options_.allow_concurrent_memtable_write &&
                     write_group.size > 1;
     size_t total_count = 0;
     size_t valid_batches = 0;
     size_t total_byte_size = 0;
-    for (auto* writer : write_group) {
+    for (auto* writer : write_group) { //遍历该group组下面的所有writer
       if (writer->CheckCallback(this)) {
         valid_batches += writer->batch_cnt;
         if (writer->ShouldWriteToMemtable()) {
           total_count += WriteBatchInternal::Count(writer->batch);
-          parallel = parallel && !writer->batch->HasMerge();
+          parallel = parallel && !writer->batch->HasMerge(); //没有merge操作 
         }
 
+		//获取该group组下面的所有writer的数据总长度
         total_byte_size = WriteBatchInternal::AppendedByteSize(
             total_byte_size, WriteBatchInternal::ByteSize(writer->batch));
       }
@@ -278,7 +291,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
     stats->AddDBStats(InternalStats::WRITE_DONE_BY_SELF, 1, concurrent_update);
     RecordTick(stats_, WRITE_DONE_BY_SELF);
     auto write_done_by_other = write_group.size - 1;
-    if (write_done_by_other > 0) {
+    if (write_done_by_other > 0) { //除了leader外的都是other
       stats->AddDBStats(InternalStats::WRITE_DONE_BY_OTHER, write_done_by_other,
                         concurrent_update);
       RecordTick(stats_, WRITE_DONE_BY_OTHER, write_done_by_other);
@@ -295,6 +308,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
       if (status.ok() && !write_options.disableWAL) {
         PERF_TIMER_GUARD(write_wal_time);
 		//写WAL日志在这里
+		//进入写WAL操作,最终会把这个write_group打包成一个writeBatch(通过MergeBatch函数)进行写入.
         status = WriteToWAL(write_group, log_writer, log_used, need_log_sync,
                             need_log_dir_sync, last_sequence + 1);
       }
@@ -343,10 +357,13 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
       }
     }
 
+	//写入memtable
     if (status.ok()) {
       PERF_TIMER_GUARD(write_memtable_time);
 
-      if (!parallel) {
+	  //如果不支持并发写memtable，则由leader串行将write_group的所有数据串行地写到memtable；
+	  //否则，leader线程将通过调用LaunchParallelMemTableWriters函数通知所有的follower线程并发写memtable。
+      if (!parallel) { //不是并行写
         // w.sequence will be set inside InsertInto
         w.status = WriteBatchInternal::InsertInto(
             write_group, current_sequence, column_family_memtables_.get(),
@@ -355,6 +372,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
             batch_per_txn_);
       } else {
         write_group.last_sequence = last_sequence;
+		//leader线程将通过调用LaunchParallelMemTableWriters函数通知所有的follower线程并发写memtable。
         write_thread_.LaunchParallelMemTableWriters(&write_group);
         in_parallel_group = true;
 
@@ -382,7 +400,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
     WriteStatusCheck(status);
   }
 
-  if (need_log_sync) {
+  if (need_log_sync) { //WAL sync刷盘
     mutex_.Lock();
     MarkLogsSynced(logfile_number_, need_log_dir_sync, status);
     mutex_.Unlock();
@@ -804,6 +822,7 @@ Status DBImpl::PreprocessWrite(const WriteOptions& write_options,
   return status;
 }
 
+//把write_group下面的所有write对应的Writer::batch内容添加到新的tmp_batch
 WriteBatch* DBImpl::MergeBatch(const WriteThread::WriteGroup& write_group,
                                WriteBatch* tmp_batch, size_t* write_with_wal,
                                WriteBatch** to_be_cached_state) {
@@ -846,6 +865,7 @@ WriteBatch* DBImpl::MergeBatch(const WriteThread::WriteGroup& write_group,
 
 // When two_write_queues_ is disabled, this function is called from the only
 // write thread. Otherwise this must be called holding log_write_mutex_.
+//将merged_batch中的记录写入文件，sync在外层DBImpl::WriteImpl(DBImpl::WriteImpl->DBImpl::WriteToWAL->DBImpl::WriteToWAL)
 Status DBImpl::WriteToWAL(const WriteBatch& merged_batch,
                           log::Writer* log_writer, uint64_t* log_used,
                           uint64_t* log_size) {
@@ -879,6 +899,7 @@ Status DBImpl::WriteToWAL(const WriteBatch& merged_batch,
 }
 
 //进入写WAL操作,最终会把这个write_group打包成一个writeBatch(通过MergeBatch函数)进行写入.
+//DBImpl::WriteImpl->DBImpl::WriteToWAL
 Status DBImpl::WriteToWAL(const WriteThread::WriteGroup& write_group,
                           log::Writer* log_writer, uint64_t* log_used,
                           bool need_log_sync, bool need_log_dir_sync,
@@ -889,6 +910,7 @@ Status DBImpl::WriteToWAL(const WriteThread::WriteGroup& write_group,
   // Same holds for all in the batch group
   size_t write_with_wal = 0;
   WriteBatch* to_be_cached_state = nullptr;
+  //把write_group下面的所有write对应的Writer::batch内容添加到新的tmp_batch_
   WriteBatch* merged_batch = MergeBatch(write_group, &tmp_batch_,
                                         &write_with_wal, &to_be_cached_state);
   if (merged_batch == write_group.leader->batch) {
@@ -902,6 +924,7 @@ Status DBImpl::WriteToWAL(const WriteThread::WriteGroup& write_group,
   WriteBatchInternal::SetSequence(merged_batch, sequence);
 
   uint64_t log_size;
+  
   status = WriteToWAL(*merged_batch, log_writer, log_used, &log_size);
   if (to_be_cached_state) {
     cached_recoverable_state_ = *to_be_cached_state;

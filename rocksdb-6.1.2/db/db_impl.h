@@ -745,7 +745,7 @@ class DBImpl : public DB {
 
  protected:
   // 环境，封装了系统相关的文件操作、线程等等，其中线程通过env_->GetBackgroundThreads获取
-  Env* const env_; //DBImpl.env_
+  Env* const env_; 
   const std::string dbname_;
   // 多版本DB文件
   std::unique_ptr<VersionSet> versions_;
@@ -1386,8 +1386,14 @@ class DBImpl : public DB {
 
   WriteBufferManager* write_buffer_manager_;
 
-  //参考DBImpl::WriteImpl  
+
+  //一个WriteThread::Writer代表一个写线程，和一个WriteBatch(代表这个线程要写的数据)关联，多个线程同时写，就会有多个线程同时走到该函数中，
+  //生成多个一个WriteThread::Writer,这多个WriteThread::Writer通过JoinBatchGroup组织成链表结构，参考DBImpl::WriteImpl
+  //所有线程公用一个全局的write_thread_
+
+  //参考DBImpl::WriteImpl   
   WriteThread write_thread_;
+  //DBImpl::WriteToWAL->MergeBatch(把write_group下面的所有write对应的Writer::batch内容添加到新的tmp_batch)
   WriteBatch tmp_batch_;
   // The write thread when the writers have no memtable write. This will be used
   // in 2PC to batch the prepares separately from the serial commit.
@@ -1401,6 +1407,7 @@ class DBImpl : public DB {
   // sleep if it uses up the quota.
   // Note: This is to protect memtable and compaction. If the batch only writes
   // to the WAL its size need not to be included in this.
+  //获取该leader及其下面所有follower的Writer对应的WriteBatch数据总长度
   uint64_t last_batch_group_size_;
 
   //是否有已经满掉的memtable需要刷新到磁盘

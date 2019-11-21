@@ -50,6 +50,12 @@ class WriteThread {
     // a terminal state unless the leader chooses to make this a parallel
     // batch, in which case the last parallel worker to finish will move
     // the leader to STATE_COMPLETED.
+    /*
+    leader是怎么选出来并且是怎么进行Group Commit？
+    
+    当写线程要提交事务时会将自己对应的Write实例添加到Write链表的尾部。
+    此时存在一种特殊情况，即当前待提交的线程是加入Write链表的第一个线程。在RocksDB的逻辑中，第一个加入链表的线程将成为leader线程。
+    */
     STATE_GROUP_LEADER = 2, //被选为leader
 
     // The state used to inform a waiting writer that it has become the
@@ -63,6 +69,7 @@ class WriteThread {
     // parallel writer group, or one of the followers. The writer should then
     // apply its batch to the memtable concurrently and call
     // CompleteParallelMemTableWriter.
+    //leader线程将通过调用LaunchParallelMemTableWriters函数通知所有的follower线程并发写memtable。
     STATE_PARALLEL_MEMTABLE_WRITER = 8,//并发写memtable的follower
 
     // A follower whose writes have been applied, or a parallel leader
@@ -78,6 +85,7 @@ class WriteThread {
   struct Writer;
 
 
+  //参考DBImpl::WriteImpl   WriteThread::EnterAsBatchGroupLeader
   struct WriteGroup {//Write和WriteGroup通过WriteThread::EnterAsBatchGroupLeader关联
     //当写线程要提交事务时会将自己对应的Write实例添加到Write链表的尾部。
     //此时存在一种特殊情况，即当前待提交的线程是加入Write链表的第一个线程。
@@ -89,6 +97,7 @@ class WriteThread {
     // before running goes to zero, status needs leader->StateMutex()
     Status status;
     std::atomic<size_t> running;
+    //该group组下面有多少个writer线程
     size_t size = 0;
 
     struct Iterator {
@@ -120,6 +129,10 @@ class WriteThread {
   };
 
   // Information kept for every waiting writer.
+
+  //一个WriteThread::Writer代表一个写线程，和一个WriteBatch(代表这个线程要写的数据)关联，多个线程同时写，就会有多个线程同时走到该函数中，
+  //生成多个一个WriteThread::Writer,这多个WriteThread::Writer通过JoinBatchGroup组织成链表结构，参考DBImpl::WriteImpl
+  
   //参考https://cloud.tencent.com/developer/article/1143439
   //DBImpl::PipelinedWriteImpl
   struct Writer {
@@ -137,7 +150,7 @@ class WriteThread {
     bool made_waitable;          // records lazy construction of mutex and cv
     std::atomic<uint8_t> state;  // write under StateMutex() or pre-link
     //赋值见WriteThread::EnterAsBatchGroupLeader
-    WriteGroup* write_group;
+    WriteGroup* write_group; //该write线程所属的group组
     SequenceNumber sequence;  // the sequence number to use for the first key
     Status status;
     Status callback_status;   // status returned by callback->Callback()
