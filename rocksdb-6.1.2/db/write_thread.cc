@@ -668,6 +668,7 @@ bool WriteThread::CompleteParallelMemTableWriter(Writer* w) {
     return false;
   }
   // else we're the last parallel worker and should perform exit duties.
+  //说明最后一个写完memtable的w
   w->status = write_group->status;
   return true;
 }

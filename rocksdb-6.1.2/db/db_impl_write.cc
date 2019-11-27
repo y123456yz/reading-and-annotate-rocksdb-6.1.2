@@ -234,7 +234,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
   TEST_SYNC_POINT("DBImpl::WriteImpl:BeforeLeaderEnters");
   //获取该leader及其下面所有follower的Writer对应的WriteBatch数据总长度
   last_batch_group_size_ =
-      write_thread_.EnterAsBatchGroupLeader(&w, &write_group);
+      write_thread_.EnterAsBatchGroupLeader(&w, &write_group); 
 
   if (status.ok()) {
     // Rules for when we can update the memtable concurrently
@@ -417,15 +417,21 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
 
   bool should_exit_batch_group = true;
   if (in_parallel_group) {
+  	/*
+	待所有的线程（不管leader线程或者follower线程）写完memtable，都会调用CompleteParallelMemTableWriter判断自己是否
+	是最后一个完成写memtable的线程，如果不是最后一个则等待被通知；
+	*/
     // CompleteParallelWorker returns true if this thread should
     // handle exit, false means somebody else did
     should_exit_batch_group = write_thread_.CompleteParallelMemTableWriter(&w);
   }
-  if (should_exit_batch_group) {
+  if (should_exit_batch_group) {//说明本线程对应的writer是最后一个写memtable的w
+  	//如果是最后一个是follower线程，通过调用ExitAsBatchGroupFollower函数，调用ExitAsBatchGroupLeader通知所有follower可以退出，
+  	//并且通知leader线程。 
     if (status.ok()) {
       // Note: if we are to resume after non-OK statuses we need to revisit how
       // we reacts to non-OK statuses here.
-      versions_->SetLastSequence(last_sequence);
+      versions_->SetLastSequence(last_sequence);     
     }
     MemTableInsertStatusCheck(w.status);
     write_thread_.ExitAsBatchGroupLeader(write_group, status);
