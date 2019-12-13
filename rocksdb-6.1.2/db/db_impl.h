@@ -1389,7 +1389,7 @@ class DBImpl : public DB {
 
   //一个WriteThread::Writer代表一个写线程，和一个WriteBatch(代表这个线程要写的数据)关联，多个线程同时写，就会有多个线程同时走到该函数中，
   //生成多个一个WriteThread::Writer,这多个WriteThread::Writer通过JoinBatchGroup组织成链表结构，参考DBImpl::WriteImpl
-  //所有线程公用一个全局的write_thread_
+  //所有线程公用一个全局的write_thread_,通过write_thread_关联起来
 
   //参考DBImpl::WriteImpl   
   WriteThread write_thread_;

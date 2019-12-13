@@ -392,6 +392,7 @@ class WriteThread {
   const uint64_t slow_yield_usec_;
 
   // Allow multiple writers write to memtable concurrently.
+  //是否支持对各writer并发写memtable,默认true，见struct DBOptions
   const bool allow_concurrent_memtable_write_;
 
   // Enable pipelined write to WAL and memtable.

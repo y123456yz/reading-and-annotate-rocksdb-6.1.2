@@ -63,7 +63,7 @@ uint8_t WriteThread::BlockingAwaitState(Writer* w, uint8_t goal_mask) {
 1. Loop
 2. Short-Wait: Loop + std::this_thread::yield()
 3. Long-Wait: std::condition_variable::wait()
-*/
+*/ //其他线程通过SetState(w, goal_mask)来唤醒本线程
 uint8_t WriteThread::AwaitState(Writer* w, uint8_t goal_mask,
                                 AdaptationContext* ctx) {
   uint8_t state;
@@ -413,8 +413,12 @@ void WriteThread::EndWriteStall() {
 //DBImpl::PipelinedWriteImpl
 static WriteThread::AdaptationContext jbg_ctx("JoinBatchGroup");
 
+//可以参考下http://mysql.taobao.org/monthly/2017/07/05/
 //一个WriteThread::Writer代表一个写线程，和一个WriteBatch(代表这个线程要写的数据)关联，多个线程同时写，就会有多个线程同时走到该函数中，
 //生成多个一个WriteThread::Writer,这多个WriteThread::Writer通过JoinBatchGroup组织成链表结构，参考DBImpl::WriteImpl
+
+//follower线程在WriteThread::JoinBatchGroup中等待被唤醒,
+//leader在LaunchParallelMemTableWriters中唤醒follower线程
 
 
 //这个函数主要是用来将所有的写入WAL加入到一个Group中.这里可以看到当当前的Writer 
@@ -448,7 +452,9 @@ void WriteThread::JoinBatchGroup(Writer* w) {
      *      writes in parallel.
      */
     TEST_SYNC_POINT_CALLBACK("WriteThread::JoinBatchGroup:BeganWaiting", w);
-	//等待
+	//follower线程在WriteThread::JoinBatchGroup中等待被唤醒,
+	//leader在LaunchParallelMemTableWriters中唤醒follower线程
+	//等待被唤醒，其他地方通过SetState(w, stat)来唤醒该w对应的写线程，stat为下面这几种状态
     AwaitState(w, STATE_GROUP_LEADER | STATE_MEMTABLE_WRITER_LEADER |
                       STATE_PARALLEL_MEMTABLE_WRITER | STATE_COMPLETED,
                &jbg_ctx);
@@ -642,7 +648,9 @@ void WriteThread::ExitAsMemTableWriter(Writer* /*self*/,
 void WriteThread::LaunchParallelMemTableWriters(WriteGroup* write_group) {
   assert(write_group != nullptr);
   write_group->running.store(write_group->size);
-  for (auto w : *write_group) {
+  for (auto w : *write_group) { 
+  	//唤醒group中所有的writer,把对应writer的stat置为STATE_PARALLEL_MEMTABLE_WRITER
+  	//和AwaitState配合阅读
     SetState(w, STATE_PARALLEL_MEMTABLE_WRITER);
   }
 }

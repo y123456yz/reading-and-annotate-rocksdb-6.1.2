@@ -217,7 +217,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
     // PreprocessWrite does its own perf timing.
     PERF_TIMER_STOP(write_pre_and_post_process_time);  //perf_step_timer_write_pre_and_post_process_timemetric.Stop()
     //这个函数的调用是在写WAL之前，也就是每次写WAL都会进行这个判断.
-    //写memtable在这里面
+    //SwitchWAL   ScheduleFlushes在这里面
     status = PreprocessWrite(write_options, &need_log_sync, &write_context);
 
     PERF_TIMER_START(write_pre_and_post_process_time);
@@ -329,6 +329,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
     last_sequence += seq_inc;
 
     // PreReleaseCallback is called after WAL write and before memtable write
+    //PreReleaseCallback再写WAL后，写memtable前执行
     if (status.ok()) {
       SequenceNumber next_sequence = current_sequence;
       // Note: the logic for advancing seq here must be consistent with the
@@ -364,7 +365,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
 	  //如果不支持并发写memtable，则由leader串行将write_group的所有数据串行地写到memtable；
 	  //否则，leader线程将通过调用LaunchParallelMemTableWriters函数通知所有的follower线程并发写memtable。
       if (!parallel) { //不是并行写
-        // w.sequence will be set inside InsertInto
+        // w.sequence will be set inside InsertInto   
         w.status = WriteBatchInternal::InsertInto(
             write_group, current_sequence, column_family_memtables_.get(),
             &flush_scheduler_, write_options.ignore_missing_column_families,
@@ -373,6 +374,9 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
       } else {
         write_group.last_sequence = last_sequence;
 		//leader线程将通过调用LaunchParallelMemTableWriters函数通知所有的follower线程并发写memtable。
+		//follower线程在WriteThread::JoinBatchGroup中等待被唤醒
+
+		//follower线程在WriteThread::JoinBatchGroup中等待被唤醒,leader在LaunchParallelMemTableWriters中唤醒follower线程
         write_thread_.LaunchParallelMemTableWriters(&write_group);
         in_parallel_group = true;
 
@@ -382,6 +386,15 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
           ColumnFamilyMemTablesImpl column_family_memtables(
               versions_->GetColumnFamilySet());
           assert(w.sequence == current_sequence);
+		  /*
+		#0  rocksdb::InlineSkipList<rocksdb::MemTableRep::KeyComparator const&>::Insert
+		#1  rocksdb::(anonymous namespace)::SkipListRep::Insert
+		#2  rocksdb::MemTable::Add
+		#3  rocksdb::MemTableInserter::PutCF
+		#4  rocksdb::WriteBatch::Iterate
+		#5  rocksdb::WriteBatch::Iterate
+		#6  rocksdb::WriteBatchInternal::InsertInto
+		*/
           w.status = WriteBatchInternal::InsertInto(
               &w, w.sequence, &column_family_memtables, &flush_scheduler_,
               write_options.ignore_missing_column_families, 0 /*log_number*/,
@@ -783,7 +796,7 @@ Status DBImpl::PreprocessWrite(const WriteOptions& write_options,
   //每次写WAL之前都会调用PreprocessWrite,然后这个函数会判断flush_scheduler是否为
   //空(也就是是否有已经满掉的memtable需要刷新到磁盘).
   if (UNLIKELY(status.ok() && !flush_scheduler_.Empty())) {
-    status = ScheduleFlushes(write_context);
+    status = ScheduleFlushes(write_context);   
   }
 
   PERF_TIMER_STOP(write_scheduling_flushes_compactions_time);
@@ -1095,7 +1108,7 @@ void DBImpl::AssignAtomicFlushSeq(const autovector<ColumnFamilyData*>& cfds) {
   }
 }
 
-//断是否WAL的大小是否已经超过了设置的wal大小(max_total_wal_size).可以看到它的调用也是在每次写WAL之前.
+//判断是否WAL的大小是否已经超过了设置的wal大小(max_total_wal_size).可以看到它的调用也是在每次写WAL之前.
 //DBImpl::PreprocessWrite
 Status DBImpl::SwitchWAL(WriteContext* write_context) {
   mutex_.AssertHeld();

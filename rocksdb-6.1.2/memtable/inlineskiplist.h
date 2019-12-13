@@ -653,6 +653,18 @@ InlineSkipList<Comparator>::AllocateSplice() {
   return splice;
 }
 
+/*
+#0  rocksdb::InlineSkipList<rocksdb::MemTableRep::KeyComparator const&>::Insert
+#1  rocksdb::(anonymous namespace)::SkipListRep::Insert
+#2  rocksdb::MemTable::Add
+#3  rocksdb::MemTableInserter::PutCF
+#4  rocksdb::WriteBatch::Iterate
+#5  rocksdb::WriteBatch::Iterate
+#6  rocksdb::WriteBatchInternal::InsertInto
+#7  rocksdb::DBImpl::WriteImpl
+#8  rocksdb::DBImpl::Write
+*/
+
 template <class Comparator>
 bool InlineSkipList<Comparator>::Insert(const char* key) {
   return Insert<false>(key, seq_splice_, false);
@@ -721,6 +733,17 @@ void InlineSkipList<Comparator>::RecomputeSpliceLevels(const DecodedKey& key,
   }
 }
 
+/*
+#0  rocksdb::InlineSkipList<rocksdb::MemTableRep::KeyComparator const&>::Insert
+#1  rocksdb::(anonymous namespace)::SkipListRep::Insert
+#2  rocksdb::MemTable::Add
+#3  rocksdb::MemTableInserter::PutCF
+#4  rocksdb::WriteBatch::Iterate
+#5  rocksdb::WriteBatch::Iterate
+#6  rocksdb::WriteBatchInternal::InsertInto
+#7  rocksdb::DBImpl::WriteImpl
+#8  rocksdb::DBImpl::Write
+*/
 template <class Comparator>
 template <bool UseCAS>
 bool InlineSkipList<Comparator>::Insert(const char* key, Splice* splice,

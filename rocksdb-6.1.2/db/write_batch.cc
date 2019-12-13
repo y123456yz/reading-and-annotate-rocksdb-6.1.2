@@ -400,6 +400,19 @@ Status ReadRecordFromWriteBatch(Slice* input, char* tag,
   return Status::OK();
 }
 
+/* 
+memtable insert堆栈信息:
+#0  rocksdb::InlineSkipList<rocksdb::MemTableRep::KeyComparator const&>::Insert
+#1  rocksdb::(anonymous namespace)::SkipListRep::Insert
+#2  rocksdb::MemTable::Add
+#3  rocksdb::MemTableInserter::PutCF
+#4  rocksdb::WriteBatch::Iterate
+#5  rocksdb::WriteBatch::Iterate
+#6  rocksdb::WriteBatchInternal::InsertInto
+#7  rocksdb::DBImpl::WriteImpl
+#8  rocksdb::DBImpl::Write 
+*/
+
 //写memtable的handler为MemTableInserter
 Status WriteBatch::Iterate(Handler* handler) const {
   Slice input(rep_);
@@ -1361,6 +1374,19 @@ class MemTableInserter : public WriteBatch::Handler {
     return ret_status;
   }
 
+  /* 
+  memtable insert堆栈信息:
+#0  rocksdb::InlineSkipList<rocksdb::MemTableRep::KeyComparator const&>::Insert
+#1  rocksdb::(anonymous namespace)::SkipListRep::Insert
+#2  rocksdb::MemTable::Add
+#3  rocksdb::MemTableInserter::PutCF
+#4  rocksdb::WriteBatch::Iterate
+#5  rocksdb::WriteBatch::Iterate
+#6  rocksdb::WriteBatchInternal::InsertInto
+#7  rocksdb::DBImpl::WriteImpl
+#8  rocksdb::DBImpl::Write 
+  */
+
   //WriteBatch::Iterate
   Status PutCF(uint32_t column_family_id, const Slice& key,
                const Slice& value) override {
@@ -1801,6 +1827,18 @@ merge操作.
 // 2) During Write(), in a single-threaded write thread
 // 3) During Write(), in a concurrent context where memtables has been cloned
 // The reason is that it calls memtables->Seek(), which has a stateful cache
+/* 
+memtable insert堆栈信息:
+#0  rocksdb::InlineSkipList<rocksdb::MemTableRep::KeyComparator const&>::Insert
+#1  rocksdb::(anonymous namespace)::SkipListRep::Insert
+#2  rocksdb::MemTable::Add
+#3  rocksdb::MemTableInserter::PutCF
+#4  rocksdb::WriteBatch::Iterate
+#5  rocksdb::WriteBatch::Iterate
+#6  rocksdb::WriteBatchInternal::InsertInto
+#7  rocksdb::DBImpl::WriteImpl
+#8  rocksdb::DBImpl::Write 
+*/
 Status WriteBatchInternal::InsertInto(
     WriteThread::WriteGroup& write_group, SequenceNumber sequence,
     ColumnFamilyMemTables* memtables, FlushScheduler* flush_scheduler,
@@ -1833,6 +1871,17 @@ Status WriteBatchInternal::InsertInto(
   return Status::OK();
 }
 
+/*
+#0  rocksdb::InlineSkipList<rocksdb::MemTableRep::KeyComparator const&>::Insert
+#1  rocksdb::(anonymous namespace)::SkipListRep::Insert
+#2  rocksdb::MemTable::Add
+#3  rocksdb::MemTableInserter::PutCF
+#4  rocksdb::WriteBatch::Iterate
+#5  rocksdb::WriteBatch::Iterate
+#6  rocksdb::WriteBatchInternal::InsertInto
+#7  rocksdb::DBImpl::WriteImpl
+#8  rocksdb::DBImpl::Write 
+*/
 Status WriteBatchInternal::InsertInto(
     WriteThread::Writer* writer, SequenceNumber sequence,
     ColumnFamilyMemTables* memtables, FlushScheduler* flush_scheduler,
@@ -1849,6 +1898,7 @@ Status WriteBatchInternal::InsertInto(
       seq_per_batch, batch_per_txn);
   SetSequence(writer->batch, sequence);
   inserter.set_log_number_ref(writer->log_ref);
+  // rocksdb::WriteBatch::Iterate
   Status s = writer->batch->Iterate(&inserter);
   assert(!seq_per_batch || batch_cnt != 0);
   assert(!seq_per_batch || inserter.sequence() - sequence == batch_cnt);

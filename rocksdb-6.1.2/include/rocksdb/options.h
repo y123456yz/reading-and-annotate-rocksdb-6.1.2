@@ -822,7 +822,7 @@ struct DBOptions {
 
   // A vector of EventListeners whose callback functions will be called
   // when specific RocksDB event happens.
-  std::vector<std::shared_ptr<EventListener>> listeners;
+  //std::vector<std::shared_ptr<EventListener>> listeners;
 
   // If true, then the status of the threads involved in this DB will
   // be tracked and available via GetThreadList() API.
@@ -1022,6 +1022,10 @@ struct DBOptions {
   // If set to true, takes precedence over
   // ReadOptions::background_purge_on_iterator_cleanup.
   bool avoid_unnecessary_blocking_io = false;
+
+  // A vector of EventListeners whose callback functions will be called
+  // when specific RocksDB event happens.
+  std::vector<std::shared_ptr<EventListener>> listeners;
 };
 
 // Options to control the behavior of a database (passed to DB::Open)

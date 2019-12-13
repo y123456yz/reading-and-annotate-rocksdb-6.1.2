@@ -478,6 +478,19 @@ MemTable::MemTableStats MemTable::ApproximateStats(const Slice& start_ikey,
   return {entry_count * (data_size / n), entry_count};
 }
 
+/* 
+memtable insert堆栈信息:
+#0  rocksdb::InlineSkipList<rocksdb::MemTableRep::KeyComparator const&>::Insert
+#1  rocksdb::(anonymous namespace)::SkipListRep::Insert
+#2  rocksdb::MemTable::Add
+#3  rocksdb::MemTableInserter::PutCF
+#4  rocksdb::WriteBatch::Iterate
+#5  rocksdb::WriteBatch::Iterate
+#6  rocksdb::WriteBatchInternal::InsertInto
+#7  rocksdb::DBImpl::WriteImpl
+#8  rocksdb::DBImpl::Write 
+*/
+
 //图解参考https://blog.csdn.net/caoshangpa/article/details/78901792
 //MemTable::Add和MemTable::Get对应
 bool MemTable::Add(SequenceNumber s, ValueType type,
