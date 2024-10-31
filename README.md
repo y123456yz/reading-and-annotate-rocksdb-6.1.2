@@ -1,4 +1,6 @@
   # reading-and-annotate-rocksdb-6.1.2
+rocksdb理解好文章:  一文科普 RocksDB 工作原理  https://zhuanlan.zhihu.com/p/632841342
+polardb村算分离好文章: 从架构层面分析PolarDB技术要点 https://www.modb.pro/db/1711317557817974784
 rocksdb-6.1.2 KV存储引擎源码中文注释分析
 
 nginx高并发设计优秀思想应用于其他高并发代理中间件:   
